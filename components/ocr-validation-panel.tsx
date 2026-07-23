@@ -55,10 +55,14 @@ function todayString() {
 
 function queueStatusLabel(status: OcrImportRecord["queueStatus"]) {
   if (status === "new") return "新規";
-  return "要確認";
+  if (status === "confirmed") return "確認済";
+  if (status === "needs-review") return "要確認";
+  return "エラー";
 }
 
-function queueStatusClass() {
+function queueStatusClass(status: OcrImportRecord["queueStatus"]) {
+  if (status === "confirmed") return "success";
+  if (status === "error") return "danger";
   return "warning";
 }
 
@@ -122,6 +126,7 @@ export function OcrValidationPanel() {
     if (!keyword) return queueRecords;
     return queueRecords.filter((record) => {
       const source = [
+        formatDateTime(record.createdAt),
         record.imageName,
         record.businessDate,
         queueStatusLabel(record.queueStatus),
@@ -282,6 +287,32 @@ export function OcrValidationPanel() {
       await loadQueue();
     } catch (deleteError) {
       setQueueMessage(deleteError instanceof Error ? deleteError.message : "削除に失敗しました");
+    } finally {
+      setQueueActionId(null);
+    }
+  }
+
+  async function markAsConfirmed(importId: string) {
+    setQueueActionId(importId);
+    setQueueMessage(null);
+    try {
+      const response = await fetch(`/api/ocr/imports/${importId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm" }),
+      });
+      const result = (await response.json()) as { message?: string; record?: OcrImportRecord };
+      if (!response.ok) {
+        throw new Error(result.message || "確認済み更新に失敗しました");
+      }
+      setQueueMessage(result.message ?? "確認済みに更新しました");
+      if (result.record) {
+        setSavedRecord(result.record);
+      }
+      await loadQueue();
+    } catch (confirmError) {
+      setQueueMessage(confirmError instanceof Error ? confirmError.message : "確認済み更新に失敗しました");
+      await loadQueue();
     } finally {
       setQueueActionId(null);
     }
@@ -630,7 +661,7 @@ export function OcrValidationPanel() {
         <label className="field" style={{ marginBottom: "10px" }}>
           <span>検索</span>
           <input
-            placeholder="画像名・営業日・状態で検索"
+            placeholder="保存日時・画像名・営業日・状態で検索"
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
           />
@@ -663,12 +694,20 @@ export function OcrValidationPanel() {
                       <td>{record.imageName}</td>
                       <td>{record.summary.total}</td>
                       <td>
-                        <span className={`status ${queueStatusClass()}`}>
+                        <span className={`status ${queueStatusClass(record.queueStatus)}`}>
                           {queueStatusLabel(record.queueStatus)}
                         </span>
                       </td>
                       <td>
                         <div className="form-actions" style={{ padding: 0, justifyContent: "flex-start" }}>
+                          <button
+                            className="button secondary"
+                            type="button"
+                            onClick={() => void markAsConfirmed(record.id)}
+                            disabled={record.queueStatus === "confirmed" || queueActionId === record.id}
+                          >
+                            確認済みにする
+                          </button>
                           <button
                             className="button secondary"
                             type="button"

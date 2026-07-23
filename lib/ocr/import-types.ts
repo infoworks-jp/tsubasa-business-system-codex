@@ -7,7 +7,7 @@ export type OcrImportDraftRow = {
 
 export type OcrExecutionState = "not-run" | "success" | "failed";
 
-export type OcrImportQueueStatus = "new";
+export type OcrImportQueueStatus = "new" | "confirmed" | "needs-review" | "error";
 
 export type OcrImportRowStatus = "processed" | "needs-review";
 

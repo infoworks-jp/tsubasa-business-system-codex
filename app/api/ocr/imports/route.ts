@@ -110,6 +110,13 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
   };
 }
 
+function queueOrder(status: OcrImportQueueStatus) {
+  if (status === "needs-review") return 0;
+  if (status === "new") return 1;
+  if (status === "error") return 2;
+  return 3;
+}
+
 function mapErrorResponse(error: unknown) {
   if (error instanceof SupabaseNotConfiguredError) {
     return NextResponse.json(
@@ -175,6 +182,11 @@ export async function GET() {
     }
 
     const records = (data as ImportHeaderRow[] | null)?.map(toImportRecord) ?? [];
+    records.sort((a, b) => {
+      const statusDiff = queueOrder(a.queueStatus) - queueOrder(b.queueStatus);
+      if (statusDiff !== 0) return statusDiff;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
     return NextResponse.json({ records });
   } catch (error) {
     return mapErrorResponse(error);
