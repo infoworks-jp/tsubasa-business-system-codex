@@ -49,6 +49,23 @@ function emptyRow(): OcrImportDraftRow {
   return { productName: "", quantity: "", amount: "", timeSlot: "" };
 }
 
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function queueStatusLabel(status: OcrImportRecord["queueStatus"]) {
+  if (status === "new") return "新規";
+  if (status === "confirmed") return "確認済";
+  if (status === "saved") return "保存済";
+  return "エラー";
+}
+
+function queueStatusClass(status: OcrImportRecord["queueStatus"]) {
+  if (status === "saved") return "success";
+  if (status === "error") return "danger";
+  return "warning";
+}
+
 export function OcrValidationPanel() {
   const [engineId, setEngineId] = useState(ENGINES[0].id);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -59,6 +76,11 @@ export function OcrValidationPanel() {
   const [ocrState, setOcrState] = useState<OcrExecutionState>("not-run");
   const [analyses, setAnalyses] = useState<OcrAnalysis[]>([]);
   const [importRows, setImportRows] = useState<OcrImportDraftRow[]>([]);
+  const [businessDate, setBusinessDate] = useState(todayString());
+  const [queueRecords, setQueueRecords] = useState<OcrImportRecord[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+  const [queueActionId, setQueueActionId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingSave, setConfirmingSave] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -91,6 +113,67 @@ export function OcrValidationPanel() {
       if (imageUrl) URL.revokeObjectURL(imageUrl);
     };
   }, [imageUrl]);
+
+  useEffect(() => {
+    void loadQueue();
+  }, []);
+
+  async function loadQueue() {
+    setQueueLoading(true);
+    try {
+      const response = await fetch("/api/ocr/imports", { cache: "no-store" });
+      const result = (await response.json()) as { records?: OcrImportRecord[]; message?: string };
+      if (!response.ok) {
+        throw new Error(result.message || "Import Queueの取得に失敗しました");
+      }
+      setQueueRecords(result.records ?? []);
+      setQueueMessage(null);
+    } catch (queueError) {
+      setQueueMessage(
+        queueError instanceof Error
+          ? queueError.message
+          : "Import Queueの取得に失敗しました",
+      );
+    } finally {
+      setQueueLoading(false);
+    }
+  }
+
+  async function runQueueAction(importId: string, action: "confirm" | "register") {
+    setQueueActionId(importId);
+    setQueueMessage(null);
+    try {
+      const response = await fetch(`/api/ocr/imports/${importId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+
+      const result = (await response.json()) as {
+        message?: string;
+        record?: OcrImportRecord;
+      };
+
+      if (!response.ok) {
+        throw new Error(result.message || "Import Queue更新に失敗しました");
+      }
+
+      setQueueMessage(result.message ?? null);
+      if (result.record) {
+        setSavedRecord(result.record);
+      }
+      await loadQueue();
+    } catch (queueError) {
+      setQueueMessage(
+        queueError instanceof Error
+          ? queueError.message
+          : "Import Queue更新に失敗しました",
+      );
+      await loadQueue();
+    } finally {
+      setQueueActionId(null);
+    }
+  }
 
   async function handleFile(file: File | null) {
     if (!file) return;
@@ -188,6 +271,7 @@ export function OcrValidationPanel() {
           imageName,
           engineId,
           ocrState,
+          businessDate,
           rows: importRows,
         }),
       });
@@ -204,6 +288,7 @@ export function OcrValidationPanel() {
       setSavedRecord(result.record ?? null);
       setSaveMessage(result.message || "保存しました");
       setConfirmingSave(false);
+      await loadQueue();
     } catch (saveError) {
       setSaveMessage(saveError instanceof Error ? saveError.message : "保存に失敗しました");
     } finally {
@@ -365,6 +450,15 @@ export function OcrValidationPanel() {
                     OCR未実行・OCR失敗でも、画像を見ながら手入力して保存できます。保存時に商品マスターへ自動照合し、未登録商品は要確認として登録します。
                   </p>
 
+                  <label className="field" style={{ marginTop: "10px", marginBottom: 0 }}>
+                    <span>営業日</span>
+                    <input
+                      type="date"
+                      value={businessDate}
+                      onChange={(event) => setBusinessDate(event.target.value)}
+                    />
+                  </label>
+
                   <div className="table-wrap" style={{ marginTop: "14px" }}>
                     <table>
                       <thead>
@@ -486,6 +580,82 @@ export function OcrValidationPanel() {
         ) : (
           <div className="empty-state">画像をアップロードすると、ここにプレビューとOCR結果が表示されます。</div>
         )}
+      </section>
+
+      <section className="card panel">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Import queue</p>
+            <h2>Import Queue</h2>
+          </div>
+          <span className="badge">新規 / 確認済 / 保存済 / エラー</span>
+        </div>
+
+        {queueMessage ? <p className="result-note">{queueMessage}</p> : null}
+        {queueLoading ? <div className="empty-state">Import Queueを読み込み中です。</div> : null}
+
+        {!queueLoading && queueRecords.length === 0 ? (
+          <div className="empty-state">Import Queueはまだありません。</div>
+        ) : null}
+
+        {!queueLoading && queueRecords.length > 0 ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>営業日</th>
+                  <th>画像</th>
+                  <th>状態</th>
+                  <th>件数</th>
+                  <th>要確認</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queueRecords.map((record) => {
+                  const canConfirm = record.queueStatus === "new" || record.queueStatus === "error";
+                  const canRegister = record.queueStatus === "confirmed";
+                  return (
+                    <tr key={record.id}>
+                      <td>{record.businessDate}</td>
+                      <td>{record.imageName}</td>
+                      <td>
+                        <span className={`status ${queueStatusClass(record.queueStatus)}`}>
+                          {queueStatusLabel(record.queueStatus)}
+                        </span>
+                      </td>
+                      <td>{record.summary.total}</td>
+                      <td>{record.summary.needsReview}</td>
+                      <td>
+                        <div className="form-actions" style={{ padding: 0, justifyContent: "flex-start" }}>
+                          <button
+                            className="button secondary"
+                            type="button"
+                            disabled={!canConfirm || queueActionId === record.id}
+                            onClick={() => void runQueueAction(record.id, "confirm")}
+                          >
+                            確認済
+                          </button>
+                          <button
+                            className="button"
+                            type="button"
+                            disabled={!canRegister || queueActionId === record.id}
+                            onClick={() => void runQueueAction(record.id, "register")}
+                          >
+                            保存実行
+                          </button>
+                        </div>
+                        {record.errorMessage ? (
+                          <p className="result-meta">{record.errorMessage}</p>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
 
       {confirmingSave && (

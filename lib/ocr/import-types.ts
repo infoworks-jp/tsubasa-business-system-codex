@@ -7,6 +7,8 @@ export type OcrImportDraftRow = {
 
 export type OcrExecutionState = "not-run" | "success" | "failed";
 
+export type OcrImportQueueStatus = "new" | "confirmed" | "saved" | "error";
+
 export type OcrImportRowStatus = "processed" | "needs-review";
 
 export type OcrImportSavedRow = {
@@ -25,7 +27,12 @@ export type OcrImportRecord = {
   imageName: string;
   engineId: string;
   ocrState: OcrExecutionState;
+  queueStatus: OcrImportQueueStatus;
+  businessDate: string;
   createdAt: string;
+  confirmedAt?: string | null;
+  savedAt?: string | null;
+  errorMessage?: string | null;
   rows: OcrImportSavedRow[];
   summary: {
     total: number;
