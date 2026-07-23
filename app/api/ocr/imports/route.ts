@@ -123,6 +123,17 @@ function mapErrorResponse(error: unknown) {
 
   if (error instanceof Error) {
     const message = error.message;
+    if (message.includes("permission denied")) {
+      return NextResponse.json(
+        {
+          code: "SUPABASE_PERMISSION_DENIED",
+          message: "保存先テーブルへの権限が不足しています。",
+          todo: "TODO: OCR保存用マイグレーション適用後に imports/rows の RLS を確認してください。",
+        },
+        { status: 503 },
+      );
+    }
+
     if (
       message.includes("relation") ||
       message.includes("does not exist") ||
