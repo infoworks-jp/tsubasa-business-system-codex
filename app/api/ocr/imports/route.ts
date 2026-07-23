@@ -5,7 +5,7 @@ import type {
   OcrImportRecord,
   OcrImportSavedRow,
 } from "@/lib/ocr/import-types";
-import { parseBusinessDate, parseRows, toNumber, toSavedRow, type OcrImportDbRow } from "@/lib/ocr/import-utils";
+import { parseBusinessDate, parseRows, toNumber, toSavedRow, toQueueStatusOrder, type OcrImportDbRow } from "@/lib/ocr/import-utils";
 import { SupabaseNotConfiguredError } from "@/lib/products/repository";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -56,13 +56,6 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
       needsReview: Number(row.needs_review_count ?? 0),
     },
   };
-}
-
-function queueOrder(status: OcrImportQueueStatus) {
-  if (status === "needs-review") return 0;
-  if (status === "new") return 1;
-  if (status === "error") return 2;
-  return 3;
 }
 
 function mapErrorResponse(error: unknown) {
@@ -131,7 +124,7 @@ export async function GET() {
 
     const records = (data as ImportHeaderRow[] | null)?.map(toImportRecord) ?? [];
     records.sort((a, b) => {
-      const statusDiff = queueOrder(a.queueStatus) - queueOrder(b.queueStatus);
+      const statusDiff = toQueueStatusOrder(a.queueStatus) - toQueueStatusOrder(b.queueStatus);
       if (statusDiff !== 0) return statusDiff;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });

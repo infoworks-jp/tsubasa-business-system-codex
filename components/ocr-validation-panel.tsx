@@ -9,6 +9,7 @@ import type {
   OcrImportDraftRow,
   OcrImportRecord,
 } from "@/lib/ocr/import-types";
+import { toQueueStatusClass, toQueueStatusLabel } from "@/lib/ocr/import-utils";
 import { GeminiVisionEngine, OpenAiVisionEngine, TesseractEngine } from "@/lib/ocr/openai-engine";
 
 type DragState = "idle" | "dragging";
@@ -51,19 +52,6 @@ function emptyRow(): OcrImportDraftRow {
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function queueStatusLabel(status: OcrImportRecord["queueStatus"]) {
-  if (status === "new") return "新規";
-  if (status === "confirmed") return "確認済";
-  if (status === "needs-review") return "要確認";
-  return "エラー";
-}
-
-function queueStatusClass(status: OcrImportRecord["queueStatus"]) {
-  if (status === "confirmed") return "success";
-  if (status === "error") return "danger";
-  return "warning";
 }
 
 function formatDateTime(value: string) {
@@ -129,7 +117,7 @@ export function OcrValidationPanel() {
         formatDateTime(record.createdAt),
         record.imageName,
         record.businessDate,
-        queueStatusLabel(record.queueStatus),
+        toQueueStatusLabel(record.queueStatus),
       ]
         .join(" ")
         .toLowerCase();
@@ -694,8 +682,8 @@ export function OcrValidationPanel() {
                       <td>{record.imageName}</td>
                       <td>{record.summary.total}</td>
                       <td>
-                        <span className={`status ${queueStatusClass(record.queueStatus)}`}>
-                          {queueStatusLabel(record.queueStatus)}
+                        <span className={`status ${toQueueStatusClass(record.queueStatus)}`}>
+                          {toQueueStatusLabel(record.queueStatus)}
                         </span>
                       </td>
                       <td>
