@@ -6,9 +6,12 @@ create table if not exists public.ticket_ocr_imports (
 	image_name text not null,
 	engine_id text not null,
 	ocr_state text not null check (ocr_state in ('not-run', 'success', 'failed')),
+	queue_status text not null default 'new' check (queue_status in ('new')),
+	business_date date not null default current_date,
 	total_count integer not null default 0,
 	processed_count integer not null default 0,
 	needs_review_count integer not null default 0,
+	error_message text,
 	created_at timestamptz not null default now()
 );
 
@@ -39,12 +42,12 @@ begin
 		from pg_policies
 		where schemaname = 'public'
 			and tablename = 'ticket_ocr_imports'
-			and policyname = 'ticket_ocr_imports_select_admin'
+			and policyname = 'ticket_ocr_imports_select_app'
 	) then
-		create policy ticket_ocr_imports_select_admin
+		create policy ticket_ocr_imports_select_app
 			on public.ticket_ocr_imports
 			for select
-			using (auth.role() = 'authenticated');
+			using (auth.role() in ('authenticated', 'anon'));
 	end if;
 end
 $$;
@@ -56,12 +59,12 @@ begin
 		from pg_policies
 		where schemaname = 'public'
 			and tablename = 'ticket_ocr_imports'
-			and policyname = 'ticket_ocr_imports_insert_admin'
+			and policyname = 'ticket_ocr_imports_insert_app'
 	) then
-		create policy ticket_ocr_imports_insert_admin
+		create policy ticket_ocr_imports_insert_app
 			on public.ticket_ocr_imports
 			for insert
-			with check (auth.role() = 'authenticated');
+			with check (auth.role() in ('authenticated', 'anon'));
 	end if;
 end
 $$;
@@ -73,12 +76,12 @@ begin
 		from pg_policies
 		where schemaname = 'public'
 			and tablename = 'ticket_ocr_import_rows'
-			and policyname = 'ticket_ocr_import_rows_select_admin'
+			and policyname = 'ticket_ocr_import_rows_select_app'
 	) then
-		create policy ticket_ocr_import_rows_select_admin
+		create policy ticket_ocr_import_rows_select_app
 			on public.ticket_ocr_import_rows
 			for select
-			using (auth.role() = 'authenticated');
+			using (auth.role() in ('authenticated', 'anon'));
 	end if;
 end
 $$;
@@ -90,12 +93,12 @@ begin
 		from pg_policies
 		where schemaname = 'public'
 			and tablename = 'ticket_ocr_import_rows'
-			and policyname = 'ticket_ocr_import_rows_insert_admin'
+			and policyname = 'ticket_ocr_import_rows_insert_app'
 	) then
-		create policy ticket_ocr_import_rows_insert_admin
+		create policy ticket_ocr_import_rows_insert_app
 			on public.ticket_ocr_import_rows
 			for insert
-			with check (auth.role() = 'authenticated');
+			with check (auth.role() in ('authenticated', 'anon'));
 	end if;
 end
 $$;
