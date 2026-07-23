@@ -87,12 +87,32 @@ function toRepositoryError(error: unknown): Error {
     if (
       message.includes("Could not find the table") ||
       message.includes("does not exist") ||
-      message.includes("schema cache")
+      message.includes("schema cache") ||
+      message.includes("fetch failed") ||
+      message.includes("Invalid API key") ||
+      message.includes("JWSError") ||
+      message.includes("JWT")
     ) {
       return new SupabaseNotConfiguredError();
     }
   }
-  return error instanceof Error ? error : new Error("Unexpected error");
+
+  if (error && typeof error === "object") {
+    const details = JSON.stringify(error);
+    if (
+      details.includes("Could not find the table") ||
+      details.includes("does not exist") ||
+      details.includes("schema cache") ||
+      details.includes("fetch failed") ||
+      details.includes("Invalid API key") ||
+      details.includes("JWSError") ||
+      details.includes("JWT")
+    ) {
+      return new SupabaseNotConfiguredError();
+    }
+  }
+
+  return error instanceof Error ? error : new SupabaseNotConfiguredError();
 }
 
 export class SupabaseProductRepository implements ProductRepository {
