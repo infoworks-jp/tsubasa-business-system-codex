@@ -58,7 +58,7 @@ function queueStatusLabel(status: OcrImportRecord["queueStatus"]) {
   return "要確認";
 }
 
-function queueStatusClass(status: OcrImportRecord["queueStatus"]) {
+function queueStatusClass() {
   return "warning";
 }
 
@@ -576,7 +576,7 @@ export function OcrValidationPanel() {
                       <td>{record.businessDate}</td>
                       <td>{record.imageName}</td>
                       <td>
-                        <span className={`status ${queueStatusClass(record.queueStatus)}`}>
+                        <span className={`status ${queueStatusClass()}`}>
                           {queueStatusLabel(record.queueStatus)}
                         </span>
                       </td>

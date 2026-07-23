@@ -128,6 +128,7 @@ function mapErrorResponse(error: unknown) {
         {
           code: "SUPABASE_PERMISSION_DENIED",
           message: "保存先テーブルへの権限が不足しています。",
+          detail: message,
           todo: "TODO: OCR保存用マイグレーション適用後に imports/rows の RLS を確認してください。",
         },
         { status: 503 },

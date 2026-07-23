@@ -189,41 +189,12 @@ $$;
 alter table public.products enable row level security;
 alter table public.product_prices enable row level security;
 
-create policy if not exists products_select_admin
-  on public.products
-  for select
-  using (auth.role() = 'authenticated');
-
-create policy if not exists products_insert_admin
-  on public.products
-  for insert
-  with check (auth.role() = 'authenticated');
-
-create policy if not exists products_update_admin
-  on public.products
-  for update
-  using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
-
-create policy if not exists products_delete_admin
-  on public.products
-  for delete
-  using (auth.role() = 'authenticated');
-
-create policy if not exists product_prices_select_admin
-  on public.product_prices
-  for select
-  using (auth.role() = 'authenticated');
-
-create policy if not exists product_prices_insert_admin
-  on public.product_prices
-  for insert
-  with check (auth.role() = 'authenticated');
-
-create policy if not exists product_prices_update_admin
-  on public.product_prices
-  for update
-  using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+do $$ begin if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'products' and policyname = 'products_select_admin') then create policy products_select_admin on public.products for select using (auth.role() = 'authenticated'); end if; end $$;
+do $$ begin if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'products' and policyname = 'products_insert_admin') then create policy products_insert_admin on public.products for insert with check (auth.role() = 'authenticated'); end if; end $$;
+do $$ begin if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'products' and policyname = 'products_update_admin') then create policy products_update_admin on public.products for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated'); end if; end $$;
+do $$ begin if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'products' and policyname = 'products_delete_admin') then create policy products_delete_admin on public.products for delete using (auth.role() = 'authenticated'); end if; end $$;
+do $$ begin if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'product_prices' and policyname = 'product_prices_select_admin') then create policy product_prices_select_admin on public.product_prices for select using (auth.role() = 'authenticated'); end if; end $$;
+do $$ begin if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'product_prices' and policyname = 'product_prices_insert_admin') then create policy product_prices_insert_admin on public.product_prices for insert with check (auth.role() = 'authenticated'); end if; end $$;
+do $$ begin if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'product_prices' and policyname = 'product_prices_update_admin') then create policy product_prices_update_admin on public.product_prices for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated'); end if; end $$;
 
 commit;
