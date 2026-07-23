@@ -55,14 +55,10 @@ function todayString() {
 
 function queueStatusLabel(status: OcrImportRecord["queueStatus"]) {
   if (status === "new") return "新規";
-  if (status === "confirmed") return "確認済";
-  if (status === "saved") return "保存済";
-  return "エラー";
+  return "要確認";
 }
 
 function queueStatusClass(status: OcrImportRecord["queueStatus"]) {
-  if (status === "saved") return "success";
-  if (status === "error") return "danger";
   return "warning";
 }
 
@@ -80,7 +76,6 @@ export function OcrValidationPanel() {
   const [queueRecords, setQueueRecords] = useState<OcrImportRecord[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueMessage, setQueueMessage] = useState<string | null>(null);
-  const [queueActionId, setQueueActionId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingSave, setConfirmingSave] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -136,42 +131,6 @@ export function OcrValidationPanel() {
       );
     } finally {
       setQueueLoading(false);
-    }
-  }
-
-  async function runQueueAction(importId: string, action: "confirm" | "register") {
-    setQueueActionId(importId);
-    setQueueMessage(null);
-    try {
-      const response = await fetch(`/api/ocr/imports/${importId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-
-      const result = (await response.json()) as {
-        message?: string;
-        record?: OcrImportRecord;
-      };
-
-      if (!response.ok) {
-        throw new Error(result.message || "Import Queue更新に失敗しました");
-      }
-
-      setQueueMessage(result.message ?? null);
-      if (result.record) {
-        setSavedRecord(result.record);
-      }
-      await loadQueue();
-    } catch (queueError) {
-      setQueueMessage(
-        queueError instanceof Error
-          ? queueError.message
-          : "Import Queue更新に失敗しました",
-      );
-      await loadQueue();
-    } finally {
-      setQueueActionId(null);
     }
   }
 
@@ -447,7 +406,7 @@ export function OcrValidationPanel() {
                   </div>
 
                   <p className="muted" style={{ marginTop: "8px" }}>
-                    OCR未実行・OCR失敗でも、画像を見ながら手入力して保存できます。保存時に商品マスターへ自動照合し、未登録商品は要確認として登録します。
+                    OCR未実行・OCR失敗でも、画像を見ながら手入力してImport Queueへ保存できます。
                   </p>
 
                   <label className="field" style={{ marginTop: "10px", marginBottom: 0 }}>
@@ -588,7 +547,7 @@ export function OcrValidationPanel() {
             <p className="eyebrow">Import queue</p>
             <h2>Import Queue</h2>
           </div>
-          <span className="badge">新規 / 確認済 / 保存済 / エラー</span>
+          <span className="badge">保存済みデータ一覧</span>
         </div>
 
         {queueMessage ? <p className="result-note">{queueMessage}</p> : null}
@@ -608,13 +567,10 @@ export function OcrValidationPanel() {
                   <th>状態</th>
                   <th>件数</th>
                   <th>要確認</th>
-                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {queueRecords.map((record) => {
-                  const canConfirm = record.queueStatus === "new" || record.queueStatus === "error";
-                  const canRegister = record.queueStatus === "confirmed";
                   return (
                     <tr key={record.id}>
                       <td>{record.businessDate}</td>
@@ -626,29 +582,6 @@ export function OcrValidationPanel() {
                       </td>
                       <td>{record.summary.total}</td>
                       <td>{record.summary.needsReview}</td>
-                      <td>
-                        <div className="form-actions" style={{ padding: 0, justifyContent: "flex-start" }}>
-                          <button
-                            className="button secondary"
-                            type="button"
-                            disabled={!canConfirm || queueActionId === record.id}
-                            onClick={() => void runQueueAction(record.id, "confirm")}
-                          >
-                            確認済
-                          </button>
-                          <button
-                            className="button"
-                            type="button"
-                            disabled={!canRegister || queueActionId === record.id}
-                            onClick={() => void runQueueAction(record.id, "register")}
-                          >
-                            保存実行
-                          </button>
-                        </div>
-                        {record.errorMessage ? (
-                          <p className="result-meta">{record.errorMessage}</p>
-                        ) : null}
-                      </td>
                     </tr>
                   );
                 })}
@@ -663,7 +596,7 @@ export function OcrValidationPanel() {
           <section aria-modal="true" className="confirm-modal" role="dialog" aria-labelledby="ocr-import-confirm-title">
             <p className="eyebrow">Final check</p>
             <h2 id="ocr-import-confirm-title">この内容で取込保存しますか？</h2>
-            <p className="muted">保存後に商品マスターへ自動照合し、未登録商品は要確認として登録されます。</p>
+            <p className="muted">保存後、この内容がImport Queueへ登録されます。</p>
             <div className="table-wrap" style={{ marginTop: "12px" }}>
               <table>
                 <thead>
