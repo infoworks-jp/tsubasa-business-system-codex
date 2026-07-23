@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import type {
-  OcrImportDraftRow,
   OcrExecutionState,
   OcrImportQueueStatus,
   OcrImportRecord,
-  OcrImportRowStatus,
   OcrImportSavedRow,
 } from "@/lib/ocr/import-types";
+import { parseBusinessDate, parseRows, toNumber, toSavedRow, type OcrImportDbRow } from "@/lib/ocr/import-utils";
 import { SupabaseNotConfiguredError } from "@/lib/products/repository";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -36,58 +35,7 @@ type ImportHeaderRow = {
   ticket_ocr_import_rows?: ImportDetailRow[];
 };
 
-type ImportDetailRow = {
-  id: string;
-  product_name: string;
-  quantity: number;
-  amount: number;
-  time_slot: string;
-  product_id: string | null;
-  status: string;
-  review_reason: string | null;
-};
-
-function toNumber(text: string) {
-  const cleaned = text.replace(/[,，円\s]/g, "");
-  const numeric = Number(cleaned);
-  return Number.isFinite(numeric) ? numeric : 0;
-}
-
-function parseRows(raw: unknown): OcrImportDraftRow[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((row) => {
-      if (!row || typeof row !== "object") return null;
-      const item = row as Record<string, unknown>;
-      return {
-        productName: String(item.productName ?? "").trim(),
-        quantity: String(item.quantity ?? "").trim(),
-        amount: String(item.amount ?? "").trim(),
-        timeSlot: String(item.timeSlot ?? "").trim(),
-      };
-    })
-    .filter((row): row is OcrImportDraftRow => row !== null)
-    .filter((row) => row.productName.length > 0 || row.quantity.length > 0 || row.amount.length > 0);
-}
-
-function parseBusinessDate(raw: unknown): string {
-  const value = String(raw ?? "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return new Date().toISOString().slice(0, 10);
-}
-
-function toSavedRow(row: ImportDetailRow): OcrImportSavedRow {
-  return {
-    id: String(row.id),
-    productName: String(row.product_name),
-    quantity: Number(row.quantity ?? 0),
-    amount: Number(row.amount ?? 0),
-    timeSlot: String(row.time_slot ?? ""),
-    productId: row.product_id ? String(row.product_id) : null,
-    status: row.status === "processed" ? "processed" : "needs-review",
-    reviewReason: row.review_reason ? String(row.review_reason) : null,
-  };
-}
+type ImportDetailRow = OcrImportDbRow;
 
 function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
   return {
@@ -196,7 +144,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SavePayload;
-    const rows = parseRows(body.rows);
+    const rows = parseRows(body.rows, { mode: "draft" });
 
     if (rows.length === 0) {
       return NextResponse.json(
@@ -217,7 +165,7 @@ export async function POST(request: NextRequest) {
       amount: toNumber(row.amount),
       timeSlot: row.timeSlot || "要確認",
       productId: null,
-      status: "needs-review" satisfies OcrImportRowStatus,
+      status: "needs-review",
       reviewReason: "OCR保存後に確認してください",
     }));
 
@@ -283,9 +231,7 @@ export async function POST(request: NextRequest) {
       throw new Error(rowsError.message || "OCR取込明細の保存に失敗しました");
     }
 
-    const persistedRows: OcrImportSavedRow[] = (insertedRows ?? []).map((row) =>
-      toSavedRow(row as ImportDetailRow),
-    );
+    const persistedRows = (insertedRows ?? []).map((row) => toSavedRow(row as OcrImportDbRow));
 
     record.id = String(importData.id);
     record.createdAt = String(importData.created_at ?? record.createdAt);

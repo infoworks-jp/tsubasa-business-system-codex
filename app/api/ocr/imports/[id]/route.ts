@@ -3,8 +3,8 @@ import type {
   OcrExecutionState,
   OcrImportQueueStatus,
   OcrImportRecord,
-  OcrImportSavedRow,
 } from "@/lib/ocr/import-types";
+import { parseBusinessDate, parseRows, toSavedRow, type OcrImportDbRow } from "@/lib/ocr/import-utils";
 import { SupabaseNotConfiguredError } from "@/lib/products/repository";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -40,51 +40,7 @@ type RowValidationResult = {
   reviewReason: string | null;
 };
 
-type ImportDetailRow = {
-  id: string;
-  product_name: string;
-  quantity: number;
-  amount: number;
-  time_slot: string;
-  product_id: string | null;
-  status: string;
-  review_reason: string | null;
-};
-
-function toNumber(text: string) {
-  const cleaned = text.replace(/[,，円\s]/g, "");
-  const numeric = Number(cleaned);
-  return Number.isFinite(numeric) ? numeric : 0;
-}
-
-function parseBusinessDate(raw: unknown): string {
-  const value = String(raw ?? "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return new Date().toISOString().slice(0, 10);
-}
-
-function parseRows(raw: unknown) {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((row) => {
-      if (!row || typeof row !== "object") return null;
-      const item = row as Record<string, unknown>;
-      const productName = String(item.productName ?? "").trim();
-      const quantity = String(item.quantity ?? "").trim();
-      const amount = String(item.amount ?? "").trim();
-      const timeSlot = String(item.timeSlot ?? "").trim();
-      if ([productName, quantity, amount, timeSlot].every((value) => value.length === 0)) {
-        return null;
-      }
-      return {
-        productName: productName || "要確認",
-        quantity: toNumber(quantity),
-        amount: toNumber(amount),
-        timeSlot: timeSlot || "要確認",
-      };
-    })
-    .filter((row): row is { productName: string; quantity: number; amount: number; timeSlot: string } => row !== null);
-}
+type ImportDetailRow = OcrImportDbRow;
 
 function validateRowFields(productName: string, quantity: number, amount: number, timeSlot: string): RowValidationResult {
   const errors: string[] = [];
@@ -100,19 +56,6 @@ function validateRowFields(productName: string, quantity: number, amount: number
   return {
     status: "needs-review",
     reviewReason: errors.join(" / "),
-  };
-}
-
-function toSavedRow(row: ImportDetailRow): OcrImportSavedRow {
-  return {
-    id: String(row.id),
-    productName: String(row.product_name),
-    quantity: Number(row.quantity ?? 0),
-    amount: Number(row.amount ?? 0),
-    timeSlot: String(row.time_slot ?? ""),
-    productId: row.product_id ? String(row.product_id) : null,
-    status: row.status === "processed" ? "processed" : "needs-review",
-    reviewReason: row.review_reason ? String(row.review_reason) : null,
   };
 }
 
@@ -279,7 +222,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       );
     }
 
-    const rows = parseRows(body.rows);
+    const rows = parseRows(body.rows, { mode: "validated" });
     if (rows.length === 0) {
       return NextResponse.json({ message: "保存対象の行がありません" }, { status: 400 });
     }
