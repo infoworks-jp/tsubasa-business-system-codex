@@ -5,6 +5,8 @@ export type OcrImportDraftRow = {
   timeSlot: string;
 };
 
+export type OcrExecutionState = "not-run" | "success" | "failed";
+
 export type OcrImportRowStatus = "processed" | "needs-review";
 
 export type OcrImportSavedRow = {
@@ -22,6 +24,7 @@ export type OcrImportRecord = {
   id: string;
   imageName: string;
   engineId: string;
+  ocrState: OcrExecutionState;
   createdAt: string;
   rows: OcrImportSavedRow[];
   summary: {

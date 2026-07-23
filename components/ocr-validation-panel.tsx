@@ -4,7 +4,11 @@ import Image from "next/image";
 import { useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react";
 import { Upload, Sparkles } from "lucide-react";
 import type { OcrAnalysis, OcrEngine } from "@/lib/ocr/types";
-import type { OcrImportDraftRow, OcrImportRecord } from "@/lib/ocr/import-types";
+import type {
+  OcrExecutionState,
+  OcrImportDraftRow,
+  OcrImportRecord,
+} from "@/lib/ocr/import-types";
 import { GeminiVisionEngine, OpenAiVisionEngine, TesseractEngine } from "@/lib/ocr/openai-engine";
 
 type DragState = "idle" | "dragging";
@@ -21,26 +25,38 @@ function analysisValue(analysis: OcrAnalysis | undefined, key: string) {
 }
 
 function createDraftRowsFromAnalysis(analysis: OcrAnalysis | undefined): OcrImportDraftRow[] {
-  if (!analysis) {
-    return [{ productName: "", quantity: "", amount: "", timeSlot: "" }];
-  }
+  if (!analysis) return [];
+
+  const productName = analysisValue(analysis, "productName");
+  const quantity = analysisValue(analysis, "quantity");
+  const amount = analysisValue(analysis, "amount");
+  const timeSlot = analysisValue(analysis, "timeSlot");
+
+  const hasAnyValue = [productName, quantity, amount, timeSlot].some((value) => value.length > 0);
+  if (!hasAnyValue) return [];
 
   return [
     {
-      productName: analysisValue(analysis, "productName"),
-      quantity: analysisValue(analysis, "quantity"),
-      amount: analysisValue(analysis, "amount"),
-      timeSlot: analysisValue(analysis, "timeSlot"),
+      productName,
+      quantity,
+      amount,
+      timeSlot,
     },
   ];
 }
 
+function emptyRow(): OcrImportDraftRow {
+  return { productName: "", quantity: "", amount: "", timeSlot: "" };
+}
+
 export function OcrValidationPanel() {
   const [engineId, setEngineId] = useState(ENGINES[0].id);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageName, setImageName] = useState("");
   const [isDragging, setIsDragging] = useState<DragState>("idle");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [ocrState, setOcrState] = useState<OcrExecutionState>("not-run");
   const [analyses, setAnalyses] = useState<OcrAnalysis[]>([]);
   const [importRows, setImportRows] = useState<OcrImportDraftRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -57,6 +73,13 @@ export function OcrValidationPanel() {
     () => analyses.find((analysis) => analysis.engineId === engineId) ?? analyses[0],
     [analyses, engineId],
   );
+  const manualInputCompleted = useMemo(
+    () =>
+      importRows.some((row) =>
+        [row.productName, row.quantity, row.amount, row.timeSlot].some((value) => value.trim().length > 0),
+      ),
+    [importRows],
+  );
   const averageConfidence = useMemo(() => {
     if (!selectedAnalysis || selectedAnalysis.fields.length === 0) return 0;
     const sum = selectedAnalysis.fields.reduce((acc, field) => acc + field.confidence, 0);
@@ -72,25 +95,40 @@ export function OcrValidationPanel() {
   async function handleFile(file: File | null) {
     if (!file) return;
     if (imageUrl) URL.revokeObjectURL(imageUrl);
+    setImageFile(file);
     setError(null);
     setSaveMessage(null);
     setSavedRecord(null);
-    setIsAnalyzing(true);
+    setOcrState("not-run");
     setAnalyses([]);
     setImportRows([]);
     const objectUrl = URL.createObjectURL(file);
     setImageUrl(objectUrl);
     setImageName(file.name);
+  }
+
+  async function runOcr() {
+    if (!imageFile || isAnalyzing) return;
+
+    setIsAnalyzing(true);
+    setError(null);
+    setAnalyses([]);
 
     try {
-      const results = await Promise.allSettled(ENGINES.map((engine) => engine.analyze(file)));
+      const results = await Promise.allSettled(ENGINES.map((engine) => engine.analyze(imageFile)));
       const fulfilled = results.flatMap((result) =>
         result.status === "fulfilled" ? [result.value] : [],
       );
       const rejected = results.filter((result) => result.status === "rejected");
 
       setAnalyses(fulfilled);
-      setImportRows(createDraftRowsFromAnalysis(fulfilled[0]));
+      setOcrState(fulfilled.length > 0 ? "success" : "failed");
+
+      const extractedRows = createDraftRowsFromAnalysis(fulfilled[0]);
+      if (extractedRows.length > 0) {
+        setImportRows(extractedRows);
+      }
+
       if (fulfilled.length === 0) {
         const firstError = rejected[0];
         setError(
@@ -104,6 +142,7 @@ export function OcrValidationPanel() {
         );
       }
     } catch (err) {
+      setOcrState("failed");
       setError(err instanceof Error ? err.message : "OCR処理に失敗しました");
     } finally {
       setIsAnalyzing(false);
@@ -129,10 +168,7 @@ export function OcrValidationPanel() {
   }
 
   function addImportRow() {
-    setImportRows((current) => [
-      ...current,
-      { productName: "", quantity: "", amount: "", timeSlot: "" },
-    ]);
+    setImportRows((current) => [...current, emptyRow()]);
   }
 
   function removeImportRow(index: number) {
@@ -151,6 +187,7 @@ export function OcrValidationPanel() {
         body: JSON.stringify({
           imageName,
           engineId,
+          ocrState,
           rows: importRows,
         }),
       });
@@ -179,8 +216,8 @@ export function OcrValidationPanel() {
       <section className="card panel">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">OCR proof</p>
-            <h2>画像から券売機ジャーナルを読み取る</h2>
+            <p className="eyebrow">Ticket journal upload</p>
+            <h2>券売機ジャーナル画像を取り込む</h2>
           </div>
           <span className="badge">
             <Sparkles size={14} aria-hidden="true" />
@@ -206,6 +243,25 @@ export function OcrValidationPanel() {
           <span className="muted">同じ画像を 3 つの OCR へ送信し、結果を横並びで比較します。</span>
         </label>
 
+        <div className="list" style={{ marginBottom: "12px" }}>
+          <div className="list-row">
+            <span>OCR状態</span>
+            <span className={`status ${ocrState === "success" ? "success" : ocrState === "failed" ? "danger" : "warning"}`}>
+              {ocrState === "success"
+                ? "OCR成功"
+                : ocrState === "failed"
+                  ? "OCR失敗"
+                  : "OCR未実行"}
+            </span>
+          </div>
+          <div className="list-row">
+            <span>入力状態</span>
+            <span className={`status ${manualInputCompleted ? "success" : "warning"}`}>
+              {manualInputCompleted ? "手入力済み" : "未入力"}
+            </span>
+          </div>
+        </div>
+
         <div
           className={`dropzone ${isDragging === "dragging" ? "dragging" : ""}`}
           onDragEnter={(event) => {
@@ -222,8 +278,14 @@ export function OcrValidationPanel() {
           <input type="file" accept="image/*" onChange={onInputChange} />
           <div className="dropzone-copy">
             <Upload size={18} aria-hidden="true" />
-            <p>画像をドラッグ&ドロップ、またはクリックして選択</p>
+            <p>券売機ジャーナル画像をドラッグ&ドロップ、またはクリックして選択</p>
           </div>
+        </div>
+
+        <div className="form-actions" style={{ paddingInline: 0, paddingBottom: 0, justifyContent: "flex-start" }}>
+          <button className="button secondary" type="button" onClick={runOcr} disabled={!imageFile || isAnalyzing}>
+            {isAnalyzing ? "OCR実行中…" : "OCRを実行"}
+          </button>
         </div>
 
         {error ? <p className="error-message">{error}</p> : null}
@@ -251,8 +313,9 @@ export function OcrValidationPanel() {
               </div>
             </div>
 
-            {analyses.length > 0 ? (
-              <div className="ocr-result-column">
+            <div className="ocr-result-column">
+              {analyses.length > 0 ? (
+                <>
                 <div className="panel-head compact">
                   <div>
                     <p className="eyebrow">Compare</p>
@@ -284,6 +347,10 @@ export function OcrValidationPanel() {
                     </section>
                   ))}
                 </div>
+                </>
+              ) : (
+                <div className="empty-state">OCR未実行または失敗のため、抽出結果は未表示です。</div>
+              )}
 
                 <section className="card panel">
                   <div className="panel-head compact">
@@ -295,7 +362,7 @@ export function OcrValidationPanel() {
                   </div>
 
                   <p className="muted" style={{ marginTop: "8px" }}>
-                    OCR結果を手修正して保存できます。保存時に商品マスターへ自動照合し、未登録商品は要確認として登録します。
+                    OCR未実行・OCR失敗でも、画像を見ながら手入力して保存できます。保存時に商品マスターへ自動照合し、未登録商品は要確認として登録します。
                   </p>
 
                   <div className="table-wrap" style={{ marginTop: "14px" }}>
@@ -313,7 +380,7 @@ export function OcrValidationPanel() {
                         {importRows.length === 0 ? (
                           <tr>
                             <td colSpan={5}>
-                              <div className="empty-state">OCR結果を読み取ると取込行が表示されます。</div>
+                              <div className="empty-state">行を追加して手入力してください。</div>
                             </td>
                           </tr>
                         ) : (
@@ -364,12 +431,7 @@ export function OcrValidationPanel() {
                     <button className="button secondary" type="button" onClick={addImportRow}>
                       行を追加
                     </button>
-                    <button
-                      className="button"
-                      type="button"
-                      onClick={() => setConfirmingSave(true)}
-                      disabled={importRows.length === 0}
-                    >
+                    <button className="button" type="button" onClick={() => setConfirmingSave(true)} disabled={importRows.length === 0}>
                       保存前確認
                     </button>
                   </div>
@@ -419,8 +481,7 @@ export function OcrValidationPanel() {
                     </div>
                   ) : null}
                 </section>
-              </div>
-            ) : null}
+            </div>
           </div>
         ) : (
           <div className="empty-state">画像をアップロードすると、ここにプレビューとOCR結果が表示されます。</div>
