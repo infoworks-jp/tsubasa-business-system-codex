@@ -1,0 +1,53 @@
+# 本番・個人情報・原本（GitHub保存禁止）
+data/
+private/
+uploads/
+originals/
+source-files/
+bank-statements/
+ticket-machine-images/
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.xlsm
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.tiff
+!docs/screenshots/*.png
+
+# 秘密情報
+.env
+.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# DB・バックアップ・出力物
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.backup
+backups/
+exports/
+
+# 開発生成物（将来用）
+node_modules/
+.next/
+dist/
+coverage/
+.DS_Store
+*.log
+.vercel/
+.turbo/
+tsconfig.tsbuildinfo
+
+# 注意: .gitignoreは誤登録防止の補助であり、実データをこの作業フォルダへ
+# 持ち込んでよいことを意味しない。秘密検知とレビューも別途必要。

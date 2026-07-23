@@ -1,0 +1,190 @@
+begin;
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.products (
+  id uuid primary key default gen_random_uuid(),
+  product_code text not null unique,
+  product_name text not null,
+  category text not null check (
+    category in ('ラーメン', 'トッピング', 'ドリンク', 'ご飯', 'セット', '限定')
+  ),
+  ticket_button_number text,
+  ticket_display_position text,
+  sales_start_date date not null,
+  sales_end_date date,
+  standard_price integer not null check (standard_price >= 0),
+  future_cost integer check (future_cost is null or future_cost >= 0),
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint products_sales_period_check check (
+    sales_end_date is null or sales_end_date >= sales_start_date
+  )
+);
+
+create table if not exists public.product_prices (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id),
+  price integer not null check (price >= 0),
+  valid_from date not null,
+  valid_to date,
+  change_reason text not null,
+  created_at timestamptz not null default now(),
+  constraint product_prices_period_check check (
+    valid_to is null or valid_to >= valid_from
+  )
+);
+
+create unique index if not exists product_prices_one_current_price
+  on public.product_prices(product_id)
+  where valid_to is null;
+
+create index if not exists product_prices_product_period
+  on public.product_prices(product_id, valid_from desc);
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists products_set_updated_at on public.products;
+create trigger products_set_updated_at
+before update on public.products
+for each row execute function public.set_updated_at();
+
+create or replace function public.create_product_with_price(
+  product_data jsonb,
+  initial_reason text
+)
+returns public.products
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  created_product public.products;
+begin
+  insert into public.products (
+    product_code, product_name, category, ticket_button_number,
+    ticket_display_position, sales_start_date, sales_end_date,
+    standard_price, future_cost, is_active
+  ) values (
+    product_data->>'product_code',
+    product_data->>'product_name',
+    product_data->>'category',
+    product_data->>'ticket_button_number',
+    product_data->>'ticket_display_position',
+    (product_data->>'sales_start_date')::date,
+    nullif(product_data->>'sales_end_date', '')::date,
+    (product_data->>'standard_price')::integer,
+    nullif(product_data->>'future_cost', '')::integer,
+    coalesce((product_data->>'is_active')::boolean, true)
+  )
+  returning * into created_product;
+
+  insert into public.product_prices (
+    product_id, price, valid_from, valid_to, change_reason
+  ) values (
+    created_product.id,
+    created_product.standard_price,
+    created_product.sales_start_date,
+    null,
+    initial_reason
+  );
+
+  return created_product;
+end;
+$$;
+
+create or replace function public.update_product_with_price(
+  target_product_id uuid,
+  product_data jsonb,
+  price_reason text,
+  price_valid_from date
+)
+returns public.products
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  previous_product public.products;
+  updated_product public.products;
+  current_price public.product_prices;
+begin
+  select * into previous_product
+  from public.products
+  where id = target_product_id
+  for update;
+
+  if not found then
+    raise exception 'product not found' using errcode = 'P0002';
+  end if;
+
+  if previous_product.standard_price <> (product_data->>'standard_price')::integer
+     and price_valid_from is null then
+    raise exception 'price valid from is required' using errcode = '22023';
+  end if;
+
+  if previous_product.standard_price <> (product_data->>'standard_price')::integer then
+    select * into current_price
+    from public.product_prices
+    where product_id = target_product_id
+      and valid_to is null
+    for update;
+
+    if not found or price_valid_from <= current_price.valid_from then
+      raise exception 'price valid from must be after current valid from'
+        using errcode = '22023';
+    end if;
+  end if;
+
+  update public.products set
+    product_code = product_data->>'product_code',
+    product_name = product_data->>'product_name',
+    category = product_data->>'category',
+    ticket_button_number = product_data->>'ticket_button_number',
+    ticket_display_position = product_data->>'ticket_display_position',
+    sales_start_date = (product_data->>'sales_start_date')::date,
+    sales_end_date = nullif(product_data->>'sales_end_date', '')::date,
+    standard_price = (product_data->>'standard_price')::integer,
+    future_cost = nullif(product_data->>'future_cost', '')::integer,
+    is_active = coalesce((product_data->>'is_active')::boolean, is_active)
+  where id = target_product_id
+  returning * into updated_product;
+
+  if previous_product.standard_price <> updated_product.standard_price then
+    update public.product_prices
+    set valid_to = price_valid_from - 1
+    where product_id = target_product_id
+      and valid_to is null;
+
+    insert into public.product_prices (
+      product_id, price, valid_from, valid_to, change_reason
+    ) values (
+      target_product_id,
+      updated_product.standard_price,
+      price_valid_from,
+      null,
+      price_reason
+    );
+  end if;
+
+  return updated_product;
+end;
+$$;
+
+alter table public.products enable row level security;
+alter table public.product_prices enable row level security;
+
+-- No browser-facing policies are created in Phase 1B.
+-- Server-side access uses a secret key from .env.local until authentication
+-- and role policies are implemented in a later approved phase.
+
+commit;
