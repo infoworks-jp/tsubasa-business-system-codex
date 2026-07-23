@@ -4,9 +4,9 @@ import type {
   OcrExecutionState,
   OcrImportQueueStatus,
   OcrImportRecord,
+  OcrImportRowStatus,
   OcrImportSavedRow,
 } from "@/lib/ocr/import-types";
-import { getProductRepository } from "@/lib/products/get-repository";
 import { SupabaseNotConfiguredError } from "@/lib/products/repository";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -29,8 +29,6 @@ type ImportHeaderRow = {
   queue_status: OcrImportQueueStatus;
   business_date: string;
   created_at: string;
-  confirmed_at: string | null;
-  saved_at: string | null;
   error_message: string | null;
   total_count: number;
   processed_count: number;
@@ -48,10 +46,6 @@ type ImportDetailRow = {
   status: string;
   review_reason: string | null;
 };
-
-function normalizeName(value: string) {
-  return value.replace(/[\s　]/g, "").toLowerCase();
-}
 
 function toNumber(text: string) {
   const cleaned = text.replace(/[,，円\s]/g, "");
@@ -104,8 +98,8 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
     queueStatus: row.queue_status,
     businessDate: String(row.business_date),
     createdAt: String(row.created_at),
-    confirmedAt: row.confirmed_at,
-    savedAt: row.saved_at,
+    confirmedAt: null,
+    savedAt: null,
     errorMessage: row.error_message,
     rows: (row.ticket_ocr_import_rows ?? []).map(toSavedRow),
     summary: {
@@ -160,7 +154,7 @@ export async function GET() {
     const client = getSupabaseServerClient();
     const { data, error } = await client
       .from("ticket_ocr_imports")
-      .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, confirmed_at, saved_at, error_message, total_count, processed_count, needs_review_count, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
+      .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -190,29 +184,18 @@ export async function POST(request: NextRequest) {
     const imageName = String(body.imageName ?? "uploaded-image");
     const engineId = String(body.engineId ?? "unknown");
     const ocrState = String(body.ocrState ?? "not-run") as OcrExecutionState;
-  const businessDate = parseBusinessDate(body.businessDate);
+    const businessDate = parseBusinessDate(body.businessDate);
 
-    const products = await getProductRepository().list({ active: "all" });
-    const matchedRows: OcrImportSavedRow[] = rows.map((row, index) => {
-      const normalized = normalizeName(row.productName);
-      const matchedProduct =
-        products.find((product) => normalizeName(product.productName) === normalized) ??
-        products.find((product) => normalizeName(product.productName).includes(normalized));
-
-      const productId = matchedProduct?.id ?? null;
-      const status = productId ? "processed" : "needs-review";
-
-      return {
-        id: `ocr-row-${Date.now()}-${index + 1}`,
-        productName: row.productName || "要確認",
-        quantity: toNumber(row.quantity),
-        amount: toNumber(row.amount),
-        timeSlot: row.timeSlot || "要確認",
-        productId,
-        status,
-        reviewReason: productId ? null : "商品マスター未登録のため要確認",
-      };
-    });
+    const matchedRows: OcrImportSavedRow[] = rows.map((row, index) => ({
+      id: `ocr-row-${Date.now()}-${index + 1}`,
+      productName: row.productName || "要確認",
+      quantity: toNumber(row.quantity),
+      amount: toNumber(row.amount),
+      timeSlot: row.timeSlot || "要確認",
+      productId: null,
+      status: "needs-review" satisfies OcrImportRowStatus,
+      reviewReason: "OCR保存後に確認してください",
+    }));
 
     const record: OcrImportRecord = {
       id: `ocr-import-${Date.now()}`,
@@ -243,14 +226,12 @@ export async function POST(request: NextRequest) {
         ocr_state: ocrState,
         queue_status: "new",
         business_date: businessDate,
-        confirmed_at: null,
-        saved_at: null,
         error_message: null,
         total_count: record.summary.total,
         processed_count: record.summary.processed,
         needs_review_count: record.summary.needsReview,
       })
-      .select("id, created_at, queue_status, business_date, confirmed_at, saved_at, error_message")
+        .select("id, created_at, queue_status, business_date, error_message")
       .single();
 
     if (importError || !importData) {
@@ -264,7 +245,7 @@ export async function POST(request: NextRequest) {
       quantity: row.quantity,
       amount: row.amount,
       time_slot: row.timeSlot,
-      product_id: row.productId,
+      product_id: null,
       status: row.status,
       review_reason: row.reviewReason,
     }));
@@ -286,8 +267,8 @@ export async function POST(request: NextRequest) {
     record.createdAt = String(importData.created_at ?? record.createdAt);
     record.queueStatus = (importData.queue_status as OcrImportQueueStatus | undefined) ?? "new";
     record.businessDate = String(importData.business_date ?? record.businessDate);
-    record.confirmedAt = importData.confirmed_at ?? null;
-    record.savedAt = importData.saved_at ?? null;
+    record.confirmedAt = null;
+    record.savedAt = null;
     record.errorMessage = importData.error_message ?? null;
     record.rows = persistedRows;
 
