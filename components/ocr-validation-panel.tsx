@@ -62,6 +62,18 @@ function queueStatusClass() {
   return "warning";
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function OcrValidationPanel() {
   const [engineId, setEngineId] = useState(ENGINES[0].id);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -76,6 +88,9 @@ export function OcrValidationPanel() {
   const [queueRecords, setQueueRecords] = useState<OcrImportRecord[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueMessage, setQueueMessage] = useState<string | null>(null);
+  const [queueActionId, setQueueActionId] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState("");
+  const [editingImportId, setEditingImportId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingSave, setConfirmingSave] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -102,6 +117,20 @@ export function OcrValidationPanel() {
     const sum = selectedAnalysis.fields.reduce((acc, field) => acc + field.confidence, 0);
     return Math.round(sum / selectedAnalysis.fields.length);
   }, [selectedAnalysis]);
+  const filteredQueueRecords = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    if (!keyword) return queueRecords;
+    return queueRecords.filter((record) => {
+      const source = [
+        record.imageName,
+        record.businessDate,
+        queueStatusLabel(record.queueStatus),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return source.includes(keyword);
+    });
+  }, [queueRecords, searchText]);
 
   useEffect(() => {
     return () => {
@@ -217,14 +246,56 @@ export function OcrValidationPanel() {
     setImportRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
   }
 
+  function startEditing(record: OcrImportRecord) {
+    setEditingImportId(record.id);
+    setImageName(record.imageName);
+    setBusinessDate(record.businessDate);
+    setImportRows(
+      record.rows.map((row) => ({
+        productName: row.productName,
+        quantity: String(row.quantity),
+        amount: String(row.amount),
+        timeSlot: row.timeSlot,
+      })),
+    );
+    setSaveMessage("保存済みデータを編集モードで読み込みました");
+  }
+
+  function cancelEditing() {
+    setEditingImportId(null);
+    setSaveMessage("編集モードを解除しました");
+  }
+
+  async function deleteImport(importId: string) {
+    setQueueActionId(importId);
+    setQueueMessage(null);
+    try {
+      const response = await fetch(`/api/ocr/imports/${importId}`, { method: "DELETE" });
+      const result = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        throw new Error(result.message || "OCR取込データの削除に失敗しました");
+      }
+      if (editingImportId === importId) {
+        setEditingImportId(null);
+      }
+      setQueueMessage(result.message ?? "削除しました");
+      await loadQueue();
+    } catch (deleteError) {
+      setQueueMessage(deleteError instanceof Error ? deleteError.message : "削除に失敗しました");
+    } finally {
+      setQueueActionId(null);
+    }
+  }
+
   async function saveImport() {
     if (saving || importRows.length === 0) return;
     setSaving(true);
     setSaveMessage(null);
 
     try {
-      const response = await fetch("/api/ocr/imports", {
-        method: "POST",
+      const isEditing = editingImportId !== null;
+      const response = await fetch(isEditing ? `/api/ocr/imports/${editingImportId}` : "/api/ocr/imports", {
+        method: isEditing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageName,
@@ -245,7 +316,8 @@ export function OcrValidationPanel() {
       }
 
       setSavedRecord(result.record ?? null);
-      setSaveMessage(result.message || "保存しました");
+      setSaveMessage(result.message || (isEditing ? "更新しました" : "保存しました"));
+      setEditingImportId(null);
       setConfirmingSave(false);
       await loadQueue();
     } catch (saveError) {
@@ -400,7 +472,7 @@ export function OcrValidationPanel() {
                   <div className="panel-head compact">
                     <div>
                       <p className="eyebrow">Import</p>
-                      <h2>券売機OCR取込</h2>
+                      <h2>{editingImportId ? "券売機OCR取込（再編集）" : "券売機OCR取込"}</h2>
                     </div>
                     <span className="badge">OCR平均信頼度 {formatConfidence(averageConfidence)}</span>
                   </div>
@@ -484,8 +556,13 @@ export function OcrValidationPanel() {
                     <button className="button secondary" type="button" onClick={addImportRow}>
                       行を追加
                     </button>
+                    {editingImportId ? (
+                      <button className="button secondary" type="button" onClick={cancelEditing}>
+                        編集を解除
+                      </button>
+                    ) : null}
                     <button className="button" type="button" onClick={() => setConfirmingSave(true)} disabled={importRows.length === 0}>
-                      保存前確認
+                      {editingImportId ? "更新前確認" : "保存前確認"}
                     </button>
                   </div>
 
@@ -547,41 +624,69 @@ export function OcrValidationPanel() {
             <p className="eyebrow">Import queue</p>
             <h2>Import Queue</h2>
           </div>
-          <span className="badge">保存済みデータ一覧</span>
+          <span className="badge">保存データ管理</span>
         </div>
+
+        <label className="field" style={{ marginBottom: "10px" }}>
+          <span>検索</span>
+          <input
+            placeholder="画像名・営業日・状態で検索"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+          />
+        </label>
 
         {queueMessage ? <p className="result-note">{queueMessage}</p> : null}
         {queueLoading ? <div className="empty-state">Import Queueを読み込み中です。</div> : null}
 
-        {!queueLoading && queueRecords.length === 0 ? (
+        {!queueLoading && filteredQueueRecords.length === 0 ? (
           <div className="empty-state">Import Queueはまだありません。</div>
         ) : null}
 
-        {!queueLoading && queueRecords.length > 0 ? (
+        {!queueLoading && filteredQueueRecords.length > 0 ? (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>営業日</th>
+                  <th>保存日時</th>
                   <th>画像</th>
+                  <th>OCR件数</th>
                   <th>状態</th>
-                  <th>件数</th>
-                  <th>要確認</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                {queueRecords.map((record) => {
+                {filteredQueueRecords.map((record) => {
                   return (
                     <tr key={record.id}>
-                      <td>{record.businessDate}</td>
+                      <td>{formatDateTime(record.createdAt)}</td>
                       <td>{record.imageName}</td>
+                      <td>{record.summary.total}</td>
                       <td>
                         <span className={`status ${queueStatusClass()}`}>
                           {queueStatusLabel(record.queueStatus)}
                         </span>
                       </td>
-                      <td>{record.summary.total}</td>
-                      <td>{record.summary.needsReview}</td>
+                      <td>
+                        <div className="form-actions" style={{ padding: 0, justifyContent: "flex-start" }}>
+                          <button
+                            className="button secondary"
+                            type="button"
+                            onClick={() => startEditing(record)}
+                            disabled={queueActionId === record.id}
+                          >
+                            編集
+                          </button>
+                          <button
+                            className="button"
+                            type="button"
+                            onClick={() => void deleteImport(record.id)}
+                            disabled={queueActionId === record.id}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -595,8 +700,8 @@ export function OcrValidationPanel() {
         <div className="modal-backdrop" role="presentation">
           <section aria-modal="true" className="confirm-modal" role="dialog" aria-labelledby="ocr-import-confirm-title">
             <p className="eyebrow">Final check</p>
-            <h2 id="ocr-import-confirm-title">この内容で取込保存しますか？</h2>
-            <p className="muted">保存後、この内容がImport Queueへ登録されます。</p>
+            <h2 id="ocr-import-confirm-title">{editingImportId ? "この内容で更新しますか？" : "この内容で取込保存しますか？"}</h2>
+            <p className="muted">{editingImportId ? "更新後、この内容がImport Queueへ反映されます。" : "保存後、この内容がImport Queueへ登録されます。"}</p>
             <div className="table-wrap" style={{ marginTop: "12px" }}>
               <table>
                 <thead>
@@ -624,7 +729,7 @@ export function OcrValidationPanel() {
                 戻って修正
               </button>
               <button className="button" type="button" onClick={saveImport} disabled={saving}>
-                {saving ? "保存中…" : "保存する"}
+                {saving ? "保存中…" : editingImportId ? "更新する" : "保存する"}
               </button>
             </div>
           </section>

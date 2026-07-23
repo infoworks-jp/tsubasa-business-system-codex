@@ -1,16 +1,272 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { OcrExecutionState, OcrImportRecord, OcrImportSavedRow } from "@/lib/ocr/import-types";
+import { SupabaseNotConfiguredError } from "@/lib/products/repository";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const params = await context.params;
+type UpdatePayload = {
+  imageName?: unknown;
+  engineId?: unknown;
+  ocrState?: unknown;
+  businessDate?: unknown;
+  rows?: unknown;
+};
+
+type ImportHeaderRow = {
+  id: string;
+  image_name: string;
+  engine_id: string;
+  ocr_state: OcrExecutionState;
+  queue_status: "new";
+  business_date: string;
+  created_at: string;
+  error_message: string | null;
+  total_count: number;
+  processed_count: number;
+  needs_review_count: number;
+  ticket_ocr_import_rows?: ImportDetailRow[];
+};
+
+type ImportDetailRow = {
+  id: string;
+  product_name: string;
+  quantity: number;
+  amount: number;
+  time_slot: string;
+  product_id: string | null;
+  status: string;
+  review_reason: string | null;
+};
+
+function toNumber(text: string) {
+  const cleaned = text.replace(/[,，円\s]/g, "");
+  const numeric = Number(cleaned);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function parseBusinessDate(raw: unknown): string {
+  const value = String(raw ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Date().toISOString().slice(0, 10);
+}
+
+function parseRows(raw: unknown) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const item = row as Record<string, unknown>;
+      const productName = String(item.productName ?? "").trim();
+      const quantity = String(item.quantity ?? "").trim();
+      const amount = String(item.amount ?? "").trim();
+      const timeSlot = String(item.timeSlot ?? "").trim();
+      if ([productName, quantity, amount, timeSlot].every((value) => value.length === 0)) {
+        return null;
+      }
+      return {
+        productName: productName || "要確認",
+        quantity: toNumber(quantity),
+        amount: toNumber(amount),
+        timeSlot: timeSlot || "要確認",
+      };
+    })
+    .filter((row): row is { productName: string; quantity: number; amount: number; timeSlot: string } => row !== null);
+}
+
+function toSavedRow(row: ImportDetailRow): OcrImportSavedRow {
+  return {
+    id: String(row.id),
+    productName: String(row.product_name),
+    quantity: Number(row.quantity ?? 0),
+    amount: Number(row.amount ?? 0),
+    timeSlot: String(row.time_slot ?? ""),
+    productId: row.product_id ? String(row.product_id) : null,
+    status: row.status === "processed" ? "processed" : "needs-review",
+    reviewReason: row.review_reason ? String(row.review_reason) : null,
+  };
+}
+
+function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
+  return {
+    id: String(row.id),
+    imageName: String(row.image_name),
+    engineId: String(row.engine_id),
+    ocrState: row.ocr_state,
+    queueStatus: "new",
+    businessDate: String(row.business_date),
+    createdAt: String(row.created_at),
+    confirmedAt: null,
+    savedAt: null,
+    errorMessage: row.error_message,
+    rows: (row.ticket_ocr_import_rows ?? []).map(toSavedRow),
+    summary: {
+      total: Number(row.total_count ?? 0),
+      processed: Number(row.processed_count ?? 0),
+      needsReview: Number(row.needs_review_count ?? 0),
+    },
+  };
+}
+
+function mapErrorResponse(error: unknown) {
+  if (error instanceof SupabaseNotConfiguredError) {
+    return NextResponse.json(
+      {
+        code: "SUPABASE_NOT_CONFIGURED",
+        message: "接続未設定: Supabase接続情報を設定してください。",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (error instanceof Error) {
+    const message = error.message;
+    if (message.includes("permission denied")) {
+      return NextResponse.json(
+        {
+          code: "SUPABASE_PERMISSION_DENIED",
+          message: "保存先テーブルへの権限が不足しています。",
+          detail: message,
+        },
+        { status: 503 },
+      );
+    }
+    if (
+      message.includes("relation") ||
+      message.includes("does not exist") ||
+      message.includes("schema cache")
+    ) {
+      return NextResponse.json(
+        {
+          code: "SUPABASE_NOT_CONFIGURED",
+          message: "接続未設定: Supabase保存先テーブルが未設定です。",
+        },
+        { status: 503 },
+      );
+    }
+  }
+
   return NextResponse.json(
     {
-      message: "この操作は現在のフェーズでは無効です。",
-      todo: "TODO: 第2段階で商品照合、第3段階で売上集計連携を実装予定",
-      importId: String(params.id ?? ""),
+      message:
+        error instanceof Error
+          ? error.message
+          : "OCR取込データの処理に失敗しました",
     },
-    { status: 501 },
+    { status: 500 },
   );
+}
+
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const body = (await request.json()) as UpdatePayload;
+    const params = await context.params;
+    const importId = String(params.id ?? "").trim();
+
+    if (!importId) {
+      return NextResponse.json({ message: "取込IDが必要です" }, { status: 400 });
+    }
+
+    const rows = parseRows(body.rows);
+    if (rows.length === 0) {
+      return NextResponse.json({ message: "保存対象の行がありません" }, { status: 400 });
+    }
+
+    const client = getSupabaseServerClient();
+    const imageName = String(body.imageName ?? "uploaded-image");
+    const engineId = String(body.engineId ?? "unknown");
+    const ocrState = String(body.ocrState ?? "not-run") as OcrExecutionState;
+    const businessDate = parseBusinessDate(body.businessDate);
+
+    const { error: updateHeaderError } = await client
+      .from("ticket_ocr_imports")
+      .update({
+        image_name: imageName,
+        engine_id: engineId,
+        ocr_state: ocrState,
+        queue_status: "new",
+        business_date: businessDate,
+        total_count: rows.length,
+        processed_count: 0,
+        needs_review_count: rows.length,
+        error_message: null,
+      })
+      .eq("id", importId);
+
+    if (updateHeaderError) {
+      throw new Error(updateHeaderError.message || "OCR取込ヘッダの更新に失敗しました");
+    }
+
+    const { error: deleteRowsError } = await client
+      .from("ticket_ocr_import_rows")
+      .delete()
+      .eq("import_id", importId);
+
+    if (deleteRowsError) {
+      throw new Error(deleteRowsError.message || "OCR取込明細の更新準備に失敗しました");
+    }
+
+    const rowsPayload = rows.map((row, index) => ({
+      import_id: importId,
+      row_no: index + 1,
+      product_name: row.productName,
+      quantity: row.quantity,
+      amount: row.amount,
+      time_slot: row.timeSlot,
+      product_id: null,
+      status: "needs-review",
+      review_reason: "OCR保存後に確認してください",
+    }));
+
+    const { error: insertRowsError } = await client
+      .from("ticket_ocr_import_rows")
+      .insert(rowsPayload);
+
+    if (insertRowsError) {
+      throw new Error(insertRowsError.message || "OCR取込明細の更新に失敗しました");
+    }
+
+    const { data, error } = await client
+      .from("ticket_ocr_imports")
+      .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
+      .eq("id", importId)
+      .single();
+
+    if (error || !data) {
+      throw new Error(error?.message || "更新後データの取得に失敗しました");
+    }
+
+    return NextResponse.json({
+      message: "OCR取込データを更新しました",
+      record: toImportRecord(data as ImportHeaderRow),
+    });
+  } catch (error) {
+    return mapErrorResponse(error);
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const params = await context.params;
+    const importId = String(params.id ?? "").trim();
+
+    if (!importId) {
+      return NextResponse.json({ message: "取込IDが必要です" }, { status: 400 });
+    }
+
+    const client = getSupabaseServerClient();
+    const { error } = await client
+      .from("ticket_ocr_imports")
+      .delete()
+      .eq("id", importId);
+
+    if (error) {
+      throw new Error(error.message || "OCR取込データの削除に失敗しました");
+    }
+
+    return NextResponse.json({ message: "OCR取込データを削除しました" });
+  } catch (error) {
+    return mapErrorResponse(error);
+  }
 }
