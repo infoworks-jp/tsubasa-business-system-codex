@@ -2,14 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { SourceFileRecord } from "@/lib/original-sources/types";
+import { workflowStatusLabel, type WorkflowStatus } from "@/lib/operations/workflow";
+
+type WorkflowSourceRecord = SourceFileRecord & { workflowStatus: WorkflowStatus };
 
 export function SourceFileManager() {
-  const [records, setRecords] = useState<SourceFileRecord[]>([]);
+  const [records, setRecords] = useState<WorkflowSourceRecord[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [ocrImportId, setOcrImportId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [businessDates, setBusinessDates] = useState<Record<string, string>>({});
 
   const loadRecords = useCallback(async () => {
     const response = await fetch("/api/original-sources", { cache: "no-store" });
@@ -70,6 +74,36 @@ export function SourceFileManager() {
     await loadRecords();
   }
 
+  async function startManualImport(record: WorkflowSourceRecord) {
+    const businessDate = businessDates[record.id] ?? "";
+    if (!businessDate) {
+      setError("営業日を入力してください");
+      return;
+    }
+    const response = await fetch(`/api/original-sources/${record.id}/imports`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessDate }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      setError(body.message || "取込待ちを作成できません");
+      return;
+    }
+    window.location.href = `/ocr?sourceId=${encodeURIComponent(record.id)}&importId=${encodeURIComponent(body.importId)}&sourceName=${encodeURIComponent(record.originalFilename)}`;
+  }
+
+  function nextHref(record: WorkflowSourceRecord) {
+    if (record.workflowStatus === "product-matching" || record.workflowStatus === "sales-confirmation") {
+      return "/products/matching";
+    }
+    if (record.workflowStatus === "completed") return "/";
+    if (record.ocrImportId) {
+      return `/ocr?sourceId=${encodeURIComponent(record.id)}&importId=${encodeURIComponent(record.ocrImportId)}&sourceName=${encodeURIComponent(record.originalFilename)}`;
+    }
+    return null;
+  }
+
   return (
     <div className="grid source-file-sections">
       <form className="card product-form" onSubmit={upload}>
@@ -128,9 +162,26 @@ export function SourceFileManager() {
                     保存日時: {new Date(record.storedAt).toLocaleString("ja-JP")}
                     {record.ocrImportId ? ` / OCR取込ID: ${record.ocrImportId}` : ""}
                   </small>
+                  <p><span className="status warning">{workflowStatusLabel(record.workflowStatus)}</span></p>
                 </div>
                 <div className="row-actions">
                   <a href={`/api/original-sources/${record.id}`}>取得</a>
+                  {record.workflowStatus === "import-waiting" ? (
+                    <>
+                      <input
+                        aria-label={`${record.originalFilename}の営業日`}
+                        onChange={(event) => setBusinessDates((current) => ({
+                          ...current,
+                          [record.id]: event.target.value,
+                        }))}
+                        type="date"
+                        value={businessDates[record.id] ?? ""}
+                      />
+                      <button className="button secondary" onClick={() => startManualImport(record)} type="button">
+                        手入力を開始
+                      </button>
+                    </>
+                  ) : nextHref(record) ? <a href={nextHref(record) ?? "#"}>次の作業へ</a> : null}
                   <button className="text-button" onClick={() => archive(record)} type="button">
                     アーカイブ
                   </button>

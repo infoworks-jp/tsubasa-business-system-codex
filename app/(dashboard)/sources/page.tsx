@@ -1,4 +1,5 @@
 import { SourceFileManager } from "@/components/source-file-manager";
+import { WorkflowNavigation } from "@/components/workflow-navigation";
 
 export default function SourceFilesPage() {
   return (
@@ -13,6 +14,7 @@ export default function SourceFilesPage() {
         </div>
         <span className="badge">認証済み利用者のみ</span>
       </div>
+      <WorkflowNavigation />
       <SourceFileManager />
     </>
   );

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { SupabaseNotConfiguredError } from "@/lib/products/repository";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { WorkflowNavigation } from "@/components/workflow-navigation";
 
 type QueueRow = {
   queue_status: "new" | "confirmed" | "needs-review" | "error" | "archived";
@@ -205,6 +206,7 @@ export default async function HomePage() {
         </div>
         <span className="badge">運用データ反映</span>
       </header>
+      <WorkflowNavigation />
 
       <section className="grid metrics" aria-label="主要指標">
         {metrics.map(({ label, value, note, icon: Icon }) => (

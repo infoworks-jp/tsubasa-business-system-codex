@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Upload, Sparkles } from "lucide-react";
 import type { OcrAnalysis, OcrEngine } from "@/lib/ocr/types";
 import type {
@@ -66,7 +66,17 @@ function formatDateTime(value: string) {
   });
 }
 
-export function OcrValidationPanel() {
+type OcrValidationPanelProps = {
+  initialSourceId?: string;
+  initialImportId?: string;
+  initialSourceName?: string;
+};
+
+export function OcrValidationPanel({
+  initialSourceId,
+  initialImportId,
+  initialSourceName,
+}: OcrValidationPanelProps) {
   const [engineId, setEngineId] = useState(ENGINES[0].id);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -88,6 +98,7 @@ export function OcrValidationPanel() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [savedRecord, setSavedRecord] = useState<OcrImportRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const initialImportOpened = useRef(false);
 
   const selectedEngine = useMemo(
     () => ENGINES.find((engine) => engine.id === engineId) ?? ENGINES[0],
@@ -134,6 +145,29 @@ export function OcrValidationPanel() {
   useEffect(() => {
     void loadQueue();
   }, []);
+
+  useEffect(() => {
+    if (!initialImportId || initialImportOpened.current || queueLoading) return;
+    const linkedImport = queueRecords.find((record) => record.id === initialImportId);
+    if (!linkedImport) return;
+
+    initialImportOpened.current = true;
+    startEditing(linkedImport);
+    setImageName(initialSourceName || linkedImport.imageName);
+    if (initialSourceId) {
+      setImageUrl(`/api/original-sources/${encodeURIComponent(initialSourceId)}`);
+    }
+    if (linkedImport.rows.length === 0) {
+      setImportRows([emptyRow()]);
+    }
+    setSaveMessage("原本台帳に関連付けた取込を、外部OCRを使わない手入力モードで開きました");
+  }, [
+    initialImportId,
+    initialSourceId,
+    initialSourceName,
+    queueLoading,
+    queueRecords,
+  ]);
 
   async function loadQueue() {
     setQueueLoading(true);
@@ -359,6 +393,12 @@ export function OcrValidationPanel() {
             {selectedEngine.label}
           </span>
         </div>
+
+        {initialImportId ? (
+          <p className="form-note">
+            原本台帳からの手入力モードです。原本との関連を保持したまま確認・修正し、外部OCRは実行しません。
+          </p>
+        ) : null}
 
         <label className="field">
           <span>比較対象</span>

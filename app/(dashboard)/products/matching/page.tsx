@@ -1,4 +1,5 @@
 import { ProductMatchingManager } from "@/components/product-matching-manager";
+import { WorkflowNavigation } from "@/components/workflow-navigation";
 
 export default function ProductMatchingPage() {
   return (
@@ -11,6 +12,7 @@ export default function ProductMatchingPage() {
         </div>
         <span className="badge">推測照合なし</span>
       </div>
+      <WorkflowNavigation />
       <ProductMatchingManager />
     </>
   );

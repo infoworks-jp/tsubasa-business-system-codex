@@ -5,6 +5,7 @@ import { SupabaseNotConfiguredError } from "@/lib/products/repository";
 import { getAuthenticatedSupabaseClient } from "@/lib/original-sources/server";
 import { SOURCE_FILE_BUCKET, type SourceFileDbRow, toSourceFileRecord } from "@/lib/original-sources/types";
 import { calculateSha256, SourceFileValidationError, validateSourceFile } from "@/lib/original-sources/validation";
+import { resolveWorkflowStatus } from "@/lib/operations/workflow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,8 +39,44 @@ export async function GET(request: NextRequest) {
       .is("archived_at", null)
       .order("stored_at", { ascending: false });
     if (error) throw new Error(error.message);
+    const sourceRows = (data ?? []) as SourceFileDbRow[];
+    const importIds = sourceRows.flatMap((row) => row.ocr_import_id ? [row.ocr_import_id] : []);
+    const { data: imports, error: importsError } = importIds.length > 0
+      ? await client
+          .from("ticket_ocr_imports")
+          .select("id, queue_status, archived_at, ticket_ocr_import_rows(status, product_id, sales_confirmed_at, archived_at, review_reason)")
+          .in("id", importIds)
+      : { data: [], error: null };
+    if (importsError) throw new Error(importsError.message);
+    const importMap = new Map((imports ?? []).map((row) => [String(row.id), row]));
+
     return NextResponse.json({
-      records: ((data ?? []) as SourceFileDbRow[]).map(toSourceFileRecord),
+      records: sourceRows.map((row) => {
+        const importRow = row.ocr_import_id ? importMap.get(row.ocr_import_id) : null;
+        const detailRows = (importRow?.ticket_ocr_import_rows ?? []).filter(
+          (detail: { archived_at: string | null }) => detail.archived_at === null,
+        );
+        return {
+          ...toSourceFileRecord(row),
+          workflowStatus: resolveWorkflowStatus({
+            sourceArchivedAt: row.archived_at,
+            importId: row.ocr_import_id,
+            importStatus: importRow?.queue_status ?? null,
+            rowCount: detailRows.length,
+            invalidDetailCount: detailRows.filter(
+              (detail: { status: string; review_reason: string | null }) =>
+                detail.status === "needs-review" &&
+                detail.review_reason !== "商品対応を要確認",
+            ).length,
+            unmatchedProductCount: detailRows.filter(
+              (detail: { product_id: string | null }) => detail.product_id === null,
+            ).length,
+            unconfirmedSalesCount: detailRows.filter(
+              (detail: { sales_confirmed_at: string | null }) => detail.sales_confirmed_at === null,
+            ).length,
+          }),
+        };
+      }),
     });
   } catch (error) {
     return errorResponse(error);
