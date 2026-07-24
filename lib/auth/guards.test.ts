@@ -18,6 +18,7 @@ describe("auth path guards", () => {
     expect(isProtectedApiPath("/api/ocr/imports")).toBe(true);
     expect(isProtectedApiPath("/api/ocr/gemini")).toBe(true);
     expect(isProtectedApiPath("/api/original-sources")).toBe(true);
+    expect(isProtectedApiPath("/api/product-matching")).toBe(true);
     expect(isProtectedApiPath("/api/auth/login")).toBe(false);
   });
 });

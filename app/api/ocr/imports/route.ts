@@ -137,6 +137,7 @@ export async function GET(request: NextRequest) {
       .from("ticket_ocr_imports")
       .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, archived_at, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
       .is("archived_at", null)
+      .is("ticket_ocr_import_rows.archived_at", null)
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -230,6 +231,7 @@ export async function POST(request: NextRequest) {
       import_id: importData.id,
       row_no: index + 1,
       product_name: row.productName,
+      original_product_name: row.productName,
       quantity: row.quantity,
       amount: row.amount,
       time_slot: row.timeSlot,

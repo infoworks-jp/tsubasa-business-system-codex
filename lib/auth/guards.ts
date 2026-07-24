@@ -12,6 +12,7 @@ export function isProtectedApiPath(pathname: string) {
   return (
     pathname.startsWith("/api/products") ||
     pathname.startsWith("/api/ocr") ||
+    pathname.startsWith("/api/product-matching") ||
     pathname.startsWith("/api/original-sources")
   );
 }

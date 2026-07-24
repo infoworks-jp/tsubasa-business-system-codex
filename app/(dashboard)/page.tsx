@@ -66,7 +66,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         .from("ticket_ocr_imports")
         .select("queue_status, needs_review_count, archived_at")
         .is("archived_at", null),
-      client.from("ticket_product_sales_totals").select("business_date, product_id, quantity, amount"),
+      client.from("confirmed_product_sales_totals").select("business_date, product_id, quantity, amount"),
       client.from("products").select("id, product_name"),
     ]);
 
