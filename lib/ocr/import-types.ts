@@ -7,7 +7,7 @@ export type OcrImportDraftRow = {
 
 export type OcrExecutionState = "not-run" | "success" | "failed";
 
-export type OcrImportQueueStatus = "new" | "confirmed" | "needs-review" | "error";
+export type OcrImportQueueStatus = "new" | "confirmed" | "needs-review" | "error" | "archived";
 
 export type OcrImportRowStatus = "processed" | "needs-review";
 
@@ -30,6 +30,7 @@ export type OcrImportRecord = {
   queueStatus: OcrImportQueueStatus;
   businessDate: string;
   createdAt: string;
+  archivedAt?: string | null;
   confirmedAt?: string | null;
   savedAt?: string | null;
   errorMessage?: string | null;

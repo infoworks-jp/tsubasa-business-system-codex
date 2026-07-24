@@ -9,8 +9,9 @@ import { SupabaseNotConfiguredError } from "@/lib/products/repository";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 type QueueRow = {
-  queue_status: "new" | "confirmed" | "saved" | "error";
+  queue_status: "new" | "confirmed" | "needs-review" | "error" | "archived";
   needs_review_count: number;
+  archived_at?: string | null;
 };
 
 type SalesRow = {
@@ -33,7 +34,7 @@ type DashboardData = {
   queueStatusSummary: {
     newCount: number;
     confirmedCount: number;
-    savedCount: number;
+    needsReviewCount: number;
     errorCount: number;
   };
   topProducts: Array<{
@@ -61,7 +62,10 @@ async function loadDashboardData(): Promise<DashboardData> {
     const monthPrefix = currentMonthPrefix();
 
     const [{ data: importsData, error: importsError }, { data: salesData, error: salesError }, { data: productsData, error: productsError }] = await Promise.all([
-      client.from("ticket_ocr_imports").select("queue_status, needs_review_count"),
+      client
+        .from("ticket_ocr_imports")
+        .select("queue_status, needs_review_count, archived_at")
+        .is("archived_at", null),
       client.from("ticket_product_sales_totals").select("business_date, product_id, quantity, amount"),
       client.from("products").select("id, product_name"),
     ]);
@@ -110,7 +114,7 @@ async function loadDashboardData(): Promise<DashboardData> {
     const queueStatusSummary = {
       newCount: imports.filter((row) => row.queue_status === "new").length,
       confirmedCount: imports.filter((row) => row.queue_status === "confirmed").length,
-      savedCount: imports.filter((row) => row.queue_status === "saved").length,
+        needsReviewCount: imports.filter((row) => row.queue_status === "needs-review").length,
       errorCount: imports.filter((row) => row.queue_status === "error").length,
     };
 
@@ -135,7 +139,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         queueStatusSummary: {
           newCount: 0,
           confirmedCount: 0,
-          savedCount: 0,
+          needsReviewCount: 0,
           errorCount: 0,
         },
         topProducts: [],
@@ -151,7 +155,7 @@ async function loadDashboardData(): Promise<DashboardData> {
       queueStatusSummary: {
         newCount: 0,
         confirmedCount: 0,
-        savedCount: 0,
+        needsReviewCount: 0,
         errorCount: 0,
       },
       topProducts: [],
@@ -254,8 +258,8 @@ export default async function HomePage() {
               <span className="status warning">{dashboard.queueStatusSummary.confirmedCount}件</span>
             </div>
             <div className="list-row">
-              <span>Import Queue 保存済</span>
-              <span className="status success">{dashboard.queueStatusSummary.savedCount}件</span>
+              <span>Import Queue 要確認</span>
+              <span className="status warning">{dashboard.queueStatusSummary.needsReviewCount}件</span>
             </div>
             <div className="list-row">
               <span>Import Queue エラー</span>

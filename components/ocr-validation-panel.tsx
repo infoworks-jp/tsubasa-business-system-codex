@@ -266,15 +266,15 @@ export function OcrValidationPanel() {
       const response = await fetch(`/api/ocr/imports/${importId}`, { method: "DELETE" });
       const result = (await response.json()) as { message?: string };
       if (!response.ok) {
-        throw new Error(result.message || "OCR取込データの削除に失敗しました");
+        throw new Error(result.message || "OCR取込データのアーカイブに失敗しました");
       }
       if (editingImportId === importId) {
         setEditingImportId(null);
       }
-      setQueueMessage(result.message ?? "削除しました");
+      setQueueMessage(result.message ?? "アーカイブしました");
       await loadQueue();
     } catch (deleteError) {
-      setQueueMessage(deleteError instanceof Error ? deleteError.message : "削除に失敗しました");
+      setQueueMessage(deleteError instanceof Error ? deleteError.message : "アーカイブに失敗しました");
     } finally {
       setQueueActionId(null);
     }
@@ -710,7 +710,7 @@ export function OcrValidationPanel() {
                             onClick={() => void deleteImport(record.id)}
                             disabled={queueActionId === record.id}
                           >
-                            削除
+                            アーカイブ
                           </button>
                         </div>
                       </td>

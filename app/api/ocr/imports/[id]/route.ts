@@ -32,7 +32,13 @@ type ImportHeaderRow = {
   total_count: number;
   processed_count: number;
   needs_review_count: number;
+  archived_at: string | null;
   ticket_ocr_import_rows?: ImportDetailRow[];
+};
+
+type ProductLookupRow = {
+  id: string;
+  product_name: string;
 };
 
 type RowValidationResult = {
@@ -68,6 +74,7 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
     queueStatus: row.queue_status,
     businessDate: String(row.business_date),
     createdAt: String(row.created_at),
+    archivedAt: row.archived_at,
     confirmedAt: null,
     savedAt: null,
     errorMessage: row.error_message,
@@ -80,10 +87,47 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
   };
 }
 
+function normalizeProductName(productName: string) {
+  return productName.replace(/\s+/g, "").trim().toLowerCase();
+}
+
+function resolveProductId(productName: string, products: ProductLookupRow[]) {
+  const normalized = normalizeProductName(productName);
+  if (!normalized) return { productId: null as string | null, reason: "商品ID未確定" };
+
+  const matched = products.filter(
+    (product) => normalizeProductName(String(product.product_name)) === normalized,
+  );
+
+  if (matched.length === 1) {
+    return { productId: String(matched[0].id), reason: null as string | null };
+  }
+
+  if (matched.length > 1) {
+    return { productId: null as string | null, reason: "商品ID候補が複数あります" };
+  }
+
+  return { productId: null as string | null, reason: "商品ID未確定" };
+}
+
+function mergeReviewReason(baseReason: string | null, extraReason: string | null) {
+  if (!baseReason && !extraReason) return null;
+  if (!baseReason) return extraReason;
+  if (!extraReason) return baseReason;
+  return `${baseReason} / ${extraReason}`;
+}
+
+async function rebuildSalesTotals(client: ReturnType<typeof getSupabaseServerClient>) {
+  const { error } = await client.rpc("rebuild_ticket_product_sales_totals");
+  if (error) {
+    throw new Error(error.message || "売上集計の再構築に失敗しました");
+  }
+}
+
 async function fetchImport(client: ReturnType<typeof getSupabaseServerClient>, importId: string) {
   const { data, error } = await client
     .from("ticket_ocr_imports")
-    .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
+    .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, archived_at, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
     .eq("id", importId)
     .single();
 
@@ -158,6 +202,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const action = String(body.action ?? "").trim();
     if (action === "confirm") {
       const current = await fetchImport(client, importId);
+      const { data: productsData, error: productsError } = await client
+        .from("products")
+        .select("id, product_name");
+
+      if (productsError) {
+        throw new Error(productsError.message || "商品マスターの取得に失敗しました");
+      }
+
+      const products = (productsData ?? []) as ProductLookupRow[];
       const currentRows = current.ticket_ocr_import_rows ?? [];
 
       if (currentRows.length === 0) {
@@ -171,10 +224,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           Number(row.amount ?? 0),
           String(row.time_slot ?? ""),
         );
+        const resolved = resolveProductId(String(row.product_name ?? ""), products);
+        const reviewReason = mergeReviewReason(validation.reviewReason, resolved.reason);
+        const status = reviewReason ? "needs-review" : "processed";
+
         return {
           id: row.id,
-          status: validation.status,
-          reviewReason: validation.reviewReason,
+          productId: resolved.productId,
+          status,
+          reviewReason,
         };
       });
 
@@ -182,7 +240,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         validatedRows.map((row) =>
           client
             .from("ticket_ocr_import_rows")
-            .update({ status: row.status, review_reason: row.reviewReason })
+            .update({
+              product_id: row.productId,
+              status: row.status,
+              review_reason: row.reviewReason,
+            })
             .eq("id", row.id),
         ),
       );
@@ -209,6 +271,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         throw new Error(updateHeaderError.message || "確認済状態の更新に失敗しました");
       }
 
+      await rebuildSalesTotals(client);
+
       const refreshed = await fetchImport(client, importId);
       return NextResponse.json(
         {
@@ -228,6 +292,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     const currentHeader = await fetchImport(client, importId);
+    const { data: productsData, error: productsError } = await client
+      .from("products")
+      .select("id, product_name");
+
+    if (productsError) {
+      throw new Error(productsError.message || "商品マスターの取得に失敗しました");
+    }
+
+    const products = (productsData ?? []) as ProductLookupRow[];
     const editStatus: OcrImportQueueStatus =
       currentHeader.queue_status === "confirmed" ? "needs-review" : "new";
 
@@ -243,6 +316,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         row.amount,
         row.timeSlot,
       );
+      const resolved = resolveProductId(row.productName, products);
+      const reviewReason = mergeReviewReason(validation.reviewReason, resolved.reason);
+      const status = reviewReason ? "needs-review" : "processed";
+
       return {
         import_id: importId,
         row_no: index + 1,
@@ -250,9 +327,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         quantity: row.quantity,
         amount: row.amount,
         time_slot: row.timeSlot,
-        product_id: null,
-        status: validation.status,
-        review_reason: validation.reviewReason,
+        product_id: resolved.productId,
+        status,
+        review_reason: reviewReason,
       };
     });
 
@@ -307,6 +384,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       throw new Error(insertRowsError.message || "OCR取込明細の更新に失敗しました");
     }
 
+    await rebuildSalesTotals(client);
+
     const refreshed = await fetchImport(client, importId);
 
     return NextResponse.json({
@@ -330,14 +409,20 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     const client = getSupabaseServerClient();
     const { error } = await client
       .from("ticket_ocr_imports")
-      .delete()
+      .update({
+        queue_status: "archived",
+        archived_at: new Date().toISOString(),
+        archived_reason: "ユーザー操作でアーカイブ",
+      })
       .eq("id", importId);
 
     if (error) {
-      throw new Error(error.message || "OCR取込データの削除に失敗しました");
+      throw new Error(error.message || "OCR取込データのアーカイブに失敗しました");
     }
 
-    return NextResponse.json({ message: "OCR取込データを削除しました" });
+    await rebuildSalesTotals(client);
+
+    return NextResponse.json({ message: "OCR取込データをアーカイブしました" });
   } catch (error) {
     return mapErrorResponse(error);
   }

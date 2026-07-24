@@ -29,12 +29,14 @@ export function toQueueStatusLabel(status: OcrImportQueueStatus) {
   if (status === "new") return "新規";
   if (status === "confirmed") return "確認済";
   if (status === "needs-review") return "要確認";
+  if (status === "archived") return "アーカイブ";
   return "エラー";
 }
 
 export function toQueueStatusClass(status: OcrImportQueueStatus) {
   if (status === "confirmed") return "success";
   if (status === "error") return "danger";
+  if (status === "archived") return "warning";
   return "warning";
 }
 
@@ -42,7 +44,8 @@ export function toQueueStatusOrder(status: OcrImportQueueStatus) {
   if (status === "needs-review") return 0;
   if (status === "new") return 1;
   if (status === "error") return 2;
-  return 3;
+  if (status === "confirmed") return 3;
+  return 4;
 }
 
 export function isProcessedRowStatus(status: OcrImportRowStatus | string) {

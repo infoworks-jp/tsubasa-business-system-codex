@@ -32,6 +32,7 @@ type ImportHeaderRow = {
   total_count: number;
   processed_count: number;
   needs_review_count: number;
+  archived_at: string | null;
   ticket_ocr_import_rows?: ImportDetailRow[];
 };
 
@@ -46,6 +47,7 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
     queueStatus: row.queue_status,
     businessDate: String(row.business_date),
     createdAt: String(row.created_at),
+    archivedAt: row.archived_at,
     confirmedAt: null,
     savedAt: null,
     errorMessage: row.error_message,
@@ -56,6 +58,13 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
       needsReview: Number(row.needs_review_count ?? 0),
     },
   };
+}
+
+async function rebuildSalesTotals(client: ReturnType<typeof getSupabaseServerClient>) {
+  const { error } = await client.rpc("rebuild_ticket_product_sales_totals");
+  if (error) {
+    throw new Error(error.message || "売上集計の再構築に失敗しました");
+  }
 }
 
 function mapErrorResponse(error: unknown) {
@@ -114,7 +123,8 @@ export async function GET() {
     const client = getSupabaseServerClient();
     const { data, error } = await client
       .from("ticket_ocr_imports")
-      .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
+      .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, archived_at, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
+      .is("archived_at", null)
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -234,6 +244,8 @@ export async function POST(request: NextRequest) {
     record.savedAt = null;
     record.errorMessage = importData.error_message ?? null;
     record.rows = persistedRows;
+
+    await rebuildSalesTotals(client);
 
     return NextResponse.json({
       message: "OCR取込データを保存しました",

@@ -22,6 +22,13 @@
 - 日本語入力検証、保存前確認、二重送信防止、結果通知
 - Supabase未設定時の案内画面
 
+## P1 OCR取込の運用ルール（feature/ocr-save-rebuild）
+
+- Import Queue の削除操作は物理削除ではなくアーカイブで保持します。
+- `ticket_product_sales_totals` は、`queue_status=confirmed` かつ `product_id` が確定した明細だけを集計します。
+- `product_id` が未確定の明細は集計せず、`needs-review` のまま残します。
+- 元データの推測補完や数値改変は行いません。
+
 売上処理、通帳、OCR、AI分析、実データは含みません。
 
 ## Supabase接続
