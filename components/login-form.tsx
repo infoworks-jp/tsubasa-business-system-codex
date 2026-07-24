@@ -1,16 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 type LoginFormProps = {
   reason?: string;
 };
 
 export function LoginForm({ reason }: LoginFormProps) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -24,14 +21,13 @@ export function LoginForm({ reason }: LoginFormProps) {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email }),
       });
       const result = (await response.json()) as { message?: string };
       if (!response.ok) {
         throw new Error(result.message || "ログインに失敗しました");
       }
-      router.push("/");
-      router.refresh();
+      setMessage("承認済みアドレスの場合、ログインリンクを送信しました。メールをご確認ください。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "ログインに失敗しました");
     } finally {
@@ -64,22 +60,14 @@ export function LoginForm({ reason }: LoginFormProps) {
             required
           />
         </label>
-        <label className="field">
-          パスワード
-          <input
-            type="password"
-            placeholder="••••••••••"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
 
         <button className="button" type="submit" style={{ width: "100%" }} disabled={submitting}>
-          {submitting ? "ログイン中..." : "ログイン"}
+          {submitting ? "送信中..." : "ログインリンクを送る"}
         </button>
       </form>
+      <p className="form-note">
+        承認済みの加来さん専用メールアドレスだけが利用できます。パスワードは不要です。
+      </p>
     </>
   );
 }

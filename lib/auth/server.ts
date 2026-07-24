@@ -3,6 +3,9 @@ import type { User } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { isAuthorizedOwner } from "./authorization";
+
+export { isAuthorizedOwner } from "./authorization";
 
 export const AUTH_COOKIE_NAME = "sb-access-token";
 
@@ -31,7 +34,7 @@ async function getUserByAccessToken(accessToken: string): Promise<User | null> {
 
   const client = createSupabaseAuthClient();
   const { data, error } = await client.auth.getUser(accessToken);
-  if (error || !data.user) return null;
+  if (error || !data.user || !isAuthorizedOwner(data.user)) return null;
   return data.user;
 }
 

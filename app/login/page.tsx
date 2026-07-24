@@ -37,7 +37,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p className="eyebrow">Secure access</p>
           <h1 style={{ fontSize: 34 }}>ログイン</h1>
           <p className="lead" style={{ marginBottom: 30 }}>
-            店舗管理アカウントでログインしてください。
+            承認済みメールアドレスへ届くログインリンクをご利用ください。
           </p>
           <LoginForm reason={reason} />
         </div>
