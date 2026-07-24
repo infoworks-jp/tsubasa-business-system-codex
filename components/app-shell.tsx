@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Boxes, CircleAlert, ImagePlus, LayoutDashboard, LogIn } from "lucide-react";
+import { Boxes, CircleAlert, Files, ImagePlus, LayoutDashboard, LogIn } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
 const navigation = [
@@ -9,6 +9,7 @@ const navigation = [
   { href: "/products", label: "商品マスター", icon: Boxes },
   { href: "/quality", label: "品質検証", icon: CircleAlert },
   { href: "/ocr", label: "OCR検証", icon: ImagePlus },
+  { href: "/sources", label: "原本台帳", icon: Files },
   { href: "/login", label: "ログイン", icon: LogIn },
 ];
 

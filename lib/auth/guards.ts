@@ -3,10 +3,15 @@ export function isProtectedDashboardPath(pathname: string) {
     pathname === "/" ||
     pathname.startsWith("/products") ||
     pathname.startsWith("/ocr") ||
+    pathname.startsWith("/sources") ||
     pathname.startsWith("/quality")
   );
 }
 
 export function isProtectedApiPath(pathname: string) {
-  return pathname.startsWith("/api/products") || pathname.startsWith("/api/ocr");
+  return (
+    pathname.startsWith("/api/products") ||
+    pathname.startsWith("/api/ocr") ||
+    pathname.startsWith("/api/original-sources")
+  );
 }

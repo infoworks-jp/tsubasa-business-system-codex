@@ -7,6 +7,7 @@ describe("auth path guards", () => {
     expect(isProtectedDashboardPath("/products")).toBe(true);
     expect(isProtectedDashboardPath("/products/new")).toBe(true);
     expect(isProtectedDashboardPath("/ocr")).toBe(true);
+    expect(isProtectedDashboardPath("/sources")).toBe(true);
     expect(isProtectedDashboardPath("/quality/issues")).toBe(true);
     expect(isProtectedDashboardPath("/login")).toBe(false);
   });
@@ -16,6 +17,7 @@ describe("auth path guards", () => {
     expect(isProtectedApiPath("/api/products/123")).toBe(true);
     expect(isProtectedApiPath("/api/ocr/imports")).toBe(true);
     expect(isProtectedApiPath("/api/ocr/gemini")).toBe(true);
+    expect(isProtectedApiPath("/api/original-sources")).toBe(true);
     expect(isProtectedApiPath("/api/auth/login")).toBe(false);
   });
 });

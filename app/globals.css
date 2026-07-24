@@ -369,6 +369,19 @@ h1 {
   font-weight: 700;
 }
 
+.source-file-sections {
+  gap: 18px;
+}
+
+.source-file-row {
+  align-items: flex-start;
+}
+
+.source-file-meta {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+
 .text-button {
   border: 0;
   padding: 0;
