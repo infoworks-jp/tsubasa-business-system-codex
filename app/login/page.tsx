@@ -1,4 +1,5 @@
 import { LoginForm } from "@/components/login-form";
+import { AuthCallback } from "@/components/auth-callback";
 
 type LoginPageProps = {
   searchParams: Promise<{ reason?: string }>;
@@ -40,6 +41,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             承認済みメールアドレスへ届くログインリンクをご利用ください。
           </p>
           <LoginForm reason={reason} />
+          <AuthCallback />
         </div>
       </section>
     </main>

@@ -7,7 +7,7 @@ export default function AuthCallbackPage() {
         <div className="login-form">
           <p className="eyebrow">Secure access</p>
           <h1>メールリンク認証</h1>
-          <AuthCallback />
+          <AuthCallback required />
         </div>
       </section>
     </main>

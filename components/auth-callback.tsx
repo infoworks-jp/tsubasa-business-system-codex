@@ -3,11 +3,25 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-export function AuthCallback() {
-  const [message, setMessage] = useState("ログインリンクを確認しています…");
+type AuthCallbackProps = {
+  required?: boolean;
+};
+
+export function AuthCallback({ required = false }: AuthCallbackProps) {
+  const [message, setMessage] = useState<string | null>(
+    required ? "ログインリンクを確認しています…" : null,
+  );
 
   useEffect(() => {
     async function completeLogin() {
+      const hasAuthResponse =
+        window.location.hash.includes("access_token=") ||
+        window.location.search.includes("code=");
+      if (!hasAuthResponse) {
+        if (required) setMessage("ログインリンクを確認できませんでした");
+        return;
+      }
+      setMessage("ログインリンクを確認しています…");
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       if (!url || !anonKey) throw new Error("Supabase接続情報が未設定です");
@@ -32,7 +46,7 @@ export function AuthCallback() {
     void completeLogin().catch((error) => {
       setMessage(error instanceof Error ? error.message : "ログインできませんでした");
     });
-  }, []);
+  }, [required]);
 
-  return <p className="result-note" role="status">{message}</p>;
+  return message ? <p className="result-note" role="status">{message}</p> : null;
 }
