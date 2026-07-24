@@ -2,18 +2,28 @@
 
 import Link from "next/link";
 import { Boxes, CircleAlert, ImagePlus, LayoutDashboard, LogIn } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const navigation = [
   { href: "/", label: "経営者ホーム", icon: LayoutDashboard },
   { href: "/products", label: "商品マスター", icon: Boxes },
   { href: "/quality", label: "品質検証", icon: CircleAlert },
   { href: "/ocr", label: "OCR検証", icon: ImagePlus },
-  { href: "/login", label: "ログイン画面", icon: LogIn },
+  { href: "/login", label: "ログイン", icon: LogIn },
 ];
 
-export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
+export function AppShell({
+  children,
+  userEmail,
+}: Readonly<{ children: React.ReactNode; userEmail: string }>) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="shell">
@@ -44,7 +54,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           <span className="topbar-label">Phase 1 / 開発環境</span>
           <div className="user-chip">
             <span className="avatar">管</span>
-            <span>管理者（未接続）</span>
+            <span>{userEmail}</span>
+            <button className="button secondary" type="button" onClick={logout}>
+              ログアウト
+            </button>
           </div>
         </header>
         <main className="content">{children}</main>

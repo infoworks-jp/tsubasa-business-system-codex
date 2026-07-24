@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuthenticatedApiUser } from "@/lib/auth/server";
 import {
   normalizeOpenAiResponse,
   parseOcrResponseText,
@@ -8,6 +9,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuthenticatedApiUser(request);
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -66,6 +68,12 @@ export async function POST(request: NextRequest) {
     const parsed = parseOcrResponseText(text);
     return NextResponse.json(normalizeOpenAiResponse(parsed, file.name || "uploaded-image"));
   } catch (error) {
+    if (error instanceof AuthRequiredError) {
+      return NextResponse.json(
+        { code: "AUTH_REQUIRED", error: error.message },
+        { status: 401 },
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "OCR処理に失敗しました" },
       { status: 500 },

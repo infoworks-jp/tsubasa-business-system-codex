@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuthenticatedApiUser } from "@/lib/auth/server";
 import { getProductRepository } from "@/lib/products/get-repository";
 import {
   ProductCodeConflictError,
@@ -14,6 +15,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_: NextRequest, context: RouteContext) {
   try {
+    await requireAuthenticatedApiUser(_);
     const { id } = await context.params;
     const product = await getProductRepository().find(id);
     if (!product) throw new ProductNotFoundError();
@@ -25,6 +27,7 @@ export async function GET(_: NextRequest, context: RouteContext) {
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
+    await requireAuthenticatedApiUser(request);
     const parsed = productInputSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -45,6 +48,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
+    await requireAuthenticatedApiUser(request);
     const body = (await request.json()) as {
       isActive?: unknown;
       deactivationReason?: unknown;
@@ -71,6 +75,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 function apiError(error: unknown) {
+  if (error instanceof AuthRequiredError) {
+    return NextResponse.json({ code: "AUTH_REQUIRED", message: error.message }, { status: 401 });
+  }
   if (error instanceof SupabaseNotConfiguredError) {
     return NextResponse.json(
       { code: "SUPABASE_NOT_CONFIGURED", message: error.message },

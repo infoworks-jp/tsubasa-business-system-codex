@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuthenticatedApiUser } from "@/lib/auth/server";
 import { getProductRepository } from "@/lib/products/get-repository";
 import {
   ProductCodeConflictError,
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    await requireAuthenticatedApiUser(request);
     const search = request.nextUrl.searchParams.get("search") ?? "";
     const rawCategory = request.nextUrl.searchParams.get("category") ?? "";
     const category = PRODUCT_CATEGORIES.includes(rawCategory as ProductCategory)
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuthenticatedApiUser(request);
     const parsed = productInputSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -53,6 +56,9 @@ export async function POST(request: NextRequest) {
 }
 
 function apiError(error: unknown) {
+  if (error instanceof AuthRequiredError) {
+    return NextResponse.json({ code: "AUTH_REQUIRED", message: error.message }, { status: 401 });
+  }
   if (error instanceof SupabaseNotConfiguredError) {
     return NextResponse.json(
       { code: "SUPABASE_NOT_CONFIGURED", message: error.message },

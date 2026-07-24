@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuthenticatedApiUser } from "@/lib/auth/server";
 import type {
   OcrExecutionState,
   OcrImportQueueStatus,
@@ -139,6 +140,16 @@ async function fetchImport(client: ReturnType<typeof getSupabaseServerClient>, i
 }
 
 function mapErrorResponse(error: unknown) {
+  if (error instanceof AuthRequiredError) {
+    return NextResponse.json(
+      {
+        code: "AUTH_REQUIRED",
+        message: error.message,
+      },
+      { status: 401 },
+    );
+  }
+
   if (error instanceof SupabaseNotConfiguredError) {
     return NextResponse.json(
       {
@@ -189,6 +200,7 @@ function mapErrorResponse(error: unknown) {
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    await requireAuthenticatedApiUser(request);
     const body = (await request.json()) as UpdatePayload;
     const params = await context.params;
     const importId = String(params.id ?? "").trim();
@@ -399,6 +411,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    await requireAuthenticatedApiUser(_request);
     const params = await context.params;
     const importId = String(params.id ?? "").trim();
 

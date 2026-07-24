@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuthenticatedApiUser } from "@/lib/auth/server";
 import type {
   OcrExecutionState,
   OcrImportQueueStatus,
@@ -68,6 +69,16 @@ async function rebuildSalesTotals(client: ReturnType<typeof getSupabaseServerCli
 }
 
 function mapErrorResponse(error: unknown) {
+  if (error instanceof AuthRequiredError) {
+    return NextResponse.json(
+      {
+        code: "AUTH_REQUIRED",
+        message: error.message,
+      },
+      { status: 401 },
+    );
+  }
+
   if (error instanceof SupabaseNotConfiguredError) {
     return NextResponse.json(
       {
@@ -118,8 +129,9 @@ function mapErrorResponse(error: unknown) {
   );
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    await requireAuthenticatedApiUser(request);
     const client = getSupabaseServerClient();
     const { data, error } = await client
       .from("ticket_ocr_imports")
@@ -146,6 +158,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuthenticatedApiUser(request);
     const body = (await request.json()) as SavePayload;
     const rows = parseRows(body.rows, { mode: "draft" });
 

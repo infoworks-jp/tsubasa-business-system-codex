@@ -1,6 +1,13 @@
-import Link from "next/link";
+import { LoginForm } from "@/components/login-form";
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{ reason?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+  const reason = params.reason;
+
   return (
     <main className="login-page">
       <section className="login-visual">
@@ -32,30 +39,7 @@ export default function LoginPage() {
           <p className="lead" style={{ marginBottom: 30 }}>
             店舗管理アカウントでログインしてください。
           </p>
-          <label className="field">
-            メールアドレス
-            <input
-              type="email"
-              placeholder="name@example.com"
-              autoComplete="email"
-              disabled
-            />
-          </label>
-          <label className="field">
-            パスワード
-            <input
-              type="password"
-              placeholder="••••••••••"
-              autoComplete="current-password"
-              disabled
-            />
-          </label>
-          <Link className="button" href="/" style={{ width: "100%" }}>
-            雛形画面を確認
-          </Link>
-          <p className="form-note">
-            認証処理は未実装です。Supabase接続後に有効化します。
-          </p>
+          <LoginForm reason={reason} />
         </div>
       </section>
     </main>
