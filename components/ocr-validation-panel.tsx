@@ -10,11 +10,11 @@ import type {
   OcrImportRecord,
 } from "@/lib/ocr/import-types";
 import { toQueueStatusClass, toQueueStatusLabel } from "@/lib/ocr/import-utils";
-import { GeminiVisionEngine, OpenAiVisionEngine, TesseractEngine } from "@/lib/ocr/openai-engine";
+import { LocalTesseractEngine } from "@/lib/ocr/local-client-engine";
 
 type DragState = "idle" | "dragging";
 
-const ENGINES: OcrEngine[] = [new OpenAiVisionEngine(), new GeminiVisionEngine(), new TesseractEngine()];
+const ENGINES: OcrEngine[] = [new LocalTesseractEngine()];
 
 function formatConfidence(confidence: number) {
   return confidence > 0 ? `${confidence}%` : "要確認";
@@ -206,38 +206,33 @@ export function OcrValidationPanel({
   }
 
   async function runOcr() {
-    if (!imageFile || isAnalyzing) return;
+    if ((!imageFile && !initialSourceId) || isAnalyzing) return;
 
     setIsAnalyzing(true);
     setError(null);
     setAnalyses([]);
 
     try {
-      const results = await Promise.allSettled(ENGINES.map((engine) => engine.analyze(imageFile)));
-      const fulfilled = results.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : [],
-      );
-      const rejected = results.filter((result) => result.status === "rejected");
+      let targetFile = imageFile;
+      if (!targetFile && initialSourceId) {
+        const sourceResponse = await fetch(
+          `/api/original-sources/${encodeURIComponent(initialSourceId)}`,
+          { cache: "no-store" },
+        );
+        if (!sourceResponse.ok) throw new Error("原本画像を取得できませんでした");
+        const blob = await sourceResponse.blob();
+        targetFile = new File([blob], imageName || initialSourceName || "source-image", {
+          type: blob.type,
+        });
+      }
+      if (!targetFile) throw new Error("画像ファイルが必要です");
+      const analysis = await selectedEngine.analyze(targetFile);
+      setAnalyses([analysis]);
+      setOcrState("success");
 
-      setAnalyses(fulfilled);
-      setOcrState(fulfilled.length > 0 ? "success" : "failed");
-
-      const extractedRows = createDraftRowsFromAnalysis(fulfilled[0]);
+      const extractedRows = createDraftRowsFromAnalysis(analysis);
       if (extractedRows.length > 0) {
         setImportRows(extractedRows);
-      }
-
-      if (fulfilled.length === 0) {
-        const firstError = rejected[0];
-        setError(
-          firstError?.status === "rejected" && firstError.reason instanceof Error
-            ? firstError.reason.message
-            : "OCR処理に失敗しました",
-        );
-      } else if (rejected.length > 0) {
-        setError(
-          `${rejected.length}件のOCRエンジンで失敗しました。表示中の結果は成功したエンジンのみです。`,
-        );
       }
     } catch (err) {
       setOcrState("failed");
@@ -277,6 +272,21 @@ export function OcrValidationPanel({
     setEditingImportId(record.id);
     setImageName(record.imageName);
     setBusinessDate(record.businessDate);
+    setEngineId(record.engineId === "tesseract-local-jpn" ? record.engineId : ENGINES[0].id);
+    setAnalyses(
+      record.rawText !== null && record.rawText !== undefined
+        ? [{
+            engineId: record.engineId,
+            engineName: "Tesseract（ローカル日本語）",
+            imageName: record.imageName,
+            createdAt: record.createdAt,
+            summary: "保存済みのOCR原文と信頼度です。",
+            rawText: record.rawText,
+            confidence: record.ocrConfidence ?? 0,
+            fields: [],
+          }]
+        : [],
+    );
     setImportRows(
       record.rows.map((row) => ({
         productName: row.productName,
@@ -354,6 +364,8 @@ export function OcrValidationPanel({
           imageName,
           engineId,
           ocrState,
+          rawText: selectedAnalysis?.rawText ?? null,
+          ocrConfidence: selectedAnalysis?.confidence ?? null,
           businessDate,
           rows: importRows,
         }),
@@ -415,7 +427,7 @@ export function OcrValidationPanel({
               </button>
             ))}
           </div>
-          <span className="muted">同じ画像を 3 つの OCR へ送信し、結果を横並びで比較します。</span>
+          <span className="muted">外部通信せず、同梱した日本語言語データだけで読み取ります。</span>
         </label>
 
         <div className="list" style={{ marginBottom: "12px" }}>
@@ -458,7 +470,7 @@ export function OcrValidationPanel({
         </div>
 
         <div className="form-actions" style={{ paddingInline: 0, paddingBottom: 0, justifyContent: "flex-start" }}>
-          <button className="button secondary" type="button" onClick={runOcr} disabled={!imageFile || isAnalyzing}>
+          <button className="button secondary" type="button" onClick={runOcr} disabled={(!imageFile && !initialSourceId) || isAnalyzing}>
             {isAnalyzing ? "OCR実行中…" : "OCRを実行"}
           </button>
         </div>
@@ -494,9 +506,9 @@ export function OcrValidationPanel({
                 <div className="panel-head compact">
                   <div>
                     <p className="eyebrow">Compare</p>
-                    <h2>比較結果</h2>
-                  </div>
-                  <span className="badge">同じ画像を 3 種類で比較</span>
+                        <h2>ローカルOCR結果</h2>
+                      </div>
+                  <span className="badge">外部API不使用</span>
                 </div>
 
                 <div className="comparison-grid">
@@ -522,6 +534,10 @@ export function OcrValidationPanel({
                     </section>
                   ))}
                 </div>
+                <section className="result-card">
+                  <strong>OCR原文（未加工）</strong>
+                  <pre className="ocr-raw-text">{selectedAnalysis?.rawText || "読取文字なし"}</pre>
+                </section>
                 </>
               ) : (
                 <div className="empty-state">OCR未実行または失敗のため、抽出結果は未表示です。</div>

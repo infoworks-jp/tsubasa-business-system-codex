@@ -26,6 +26,8 @@ export type OcrAnalysis = {
   imageName: string;
   createdAt: string;
   summary: string;
+  rawText?: string;
+  confidence?: number;
   fields: OcrField[];
 };
 

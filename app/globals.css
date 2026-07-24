@@ -861,6 +861,16 @@ td {
   font-size: 13px;
 }
 
+.ocr-raw-text {
+  margin: 10px 0 0;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: var(--muted);
+}
+
 .panel-head.compact {
   margin-bottom: 0;
 }

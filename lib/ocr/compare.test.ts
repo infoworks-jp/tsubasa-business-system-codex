@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildTesseractAnalysisFromText } from "./openai-engine";
+import { buildLocalOcrAnalysis } from "./local-analysis";
 
-describe("buildTesseractAnalysisFromText", () => {
+describe("buildLocalOcrAnalysis", () => {
   it("extracts known fields and falls back to 要確認 for missing values", () => {
-    const analysis = buildTesseractAnalysisFromText(
+    const analysis = buildLocalOcrAnalysis(
       "商品名: 味一番つばさ ラーメン\n数量: 2\n金額: 1,200\n時間: 12:30\n",
       "journal.jpg",
       82,

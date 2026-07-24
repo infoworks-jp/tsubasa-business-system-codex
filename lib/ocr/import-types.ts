@@ -34,6 +34,8 @@ export type OcrImportRecord = {
   confirmedAt?: string | null;
   savedAt?: string | null;
   errorMessage?: string | null;
+  rawText?: string | null;
+  ocrConfidence?: number | null;
   rows: OcrImportSavedRow[];
   summary: {
     total: number;

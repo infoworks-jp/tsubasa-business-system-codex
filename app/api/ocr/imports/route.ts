@@ -17,6 +17,8 @@ type SavePayload = {
   imageName?: unknown;
   engineId?: unknown;
   ocrState?: unknown;
+  rawText?: unknown;
+  ocrConfidence?: unknown;
   businessDate?: unknown;
   rows?: unknown;
 };
@@ -34,6 +36,8 @@ type ImportHeaderRow = {
   processed_count: number;
   needs_review_count: number;
   archived_at: string | null;
+  ocr_raw_text: string | null;
+  ocr_confidence: number | null;
   ticket_ocr_import_rows?: ImportDetailRow[];
 };
 
@@ -52,6 +56,8 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
     confirmedAt: null,
     savedAt: null,
     errorMessage: row.error_message,
+    rawText: row.ocr_raw_text,
+    ocrConfidence: row.ocr_confidence,
     rows: (row.ticket_ocr_import_rows ?? []).map(toSavedRow),
     summary: {
       total: Number(row.total_count ?? 0),
@@ -135,7 +141,7 @@ export async function GET(request: NextRequest) {
     const client = getSupabaseServerClient();
     const { data, error } = await client
       .from("ticket_ocr_imports")
-      .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, archived_at, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
+      .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, archived_at, ocr_raw_text, ocr_confidence, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
       .is("archived_at", null)
       .is("ticket_ocr_import_rows.archived_at", null)
       .order("created_at", { ascending: false })
@@ -174,6 +180,11 @@ export async function POST(request: NextRequest) {
     const engineId = String(body.engineId ?? "unknown");
     const ocrState = String(body.ocrState ?? "not-run") as OcrExecutionState;
     const businessDate = parseBusinessDate(body.businessDate);
+    const rawText = typeof body.rawText === "string" ? body.rawText : null;
+    const ocrConfidence =
+      typeof body.ocrConfidence === "number" && Number.isFinite(body.ocrConfidence)
+        ? body.ocrConfidence
+        : null;
 
     const matchedRows: OcrImportSavedRow[] = rows.map((row, index) => ({
       id: `ocr-row-${Date.now()}-${index + 1}`,
@@ -197,6 +208,8 @@ export async function POST(request: NextRequest) {
       confirmedAt: null,
       savedAt: null,
       errorMessage: null,
+      rawText,
+      ocrConfidence,
       rows: matchedRows,
       summary: {
         total: matchedRows.length,
@@ -216,6 +229,8 @@ export async function POST(request: NextRequest) {
         queue_status: "new",
         business_date: businessDate,
         error_message: null,
+        ocr_raw_text: rawText,
+        ocr_confidence: ocrConfidence,
         total_count: record.summary.total,
         processed_count: record.summary.processed,
         needs_review_count: record.summary.needsReview,
