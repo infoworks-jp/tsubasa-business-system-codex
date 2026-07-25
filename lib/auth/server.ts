@@ -4,10 +4,10 @@ import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { isAuthorizedOwner } from "./authorization";
+import { AUTH_COOKIE_NAME } from "./session";
 
 export { isAuthorizedOwner } from "./authorization";
-
-export const AUTH_COOKIE_NAME = "sb-access-token";
+export { AUTH_COOKIE_NAME } from "./session";
 
 export class AuthRequiredError extends Error {
   constructor(message = "ログインが必要です") {

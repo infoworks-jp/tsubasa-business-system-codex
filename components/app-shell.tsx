@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Boxes, CircleAlert, Files, ImagePlus, LayoutDashboard, Link2, LogIn } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const navigation = [
   { href: "/", label: "経営者ホーム", icon: LayoutDashboard },
@@ -22,7 +23,11 @@ export function AppShell({
   const router = useRouter();
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    try {
+      await getSupabaseBrowserClient().auth.signOut();
+    } finally {
+      await fetch("/api/auth/logout", { method: "POST" });
+    }
     router.push("/login");
     router.refresh();
   }
