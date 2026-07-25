@@ -6,8 +6,8 @@ import type {
   OcrImportRecord,
 } from "@/lib/ocr/import-types";
 import { parseBusinessDate, parseRows, toSavedRow, type OcrImportDbRow } from "@/lib/ocr/import-utils";
+import { getAuthenticatedSupabaseClient } from "@/lib/original-sources/server";
 import { SupabaseNotConfiguredError } from "@/lib/products/repository";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,14 +96,14 @@ function mergeReviewReason(baseReason: string | null, extraReason: string | null
   return `${baseReason} / ${extraReason}`;
 }
 
-async function rebuildSalesTotals(client: ReturnType<typeof getSupabaseServerClient>) {
+async function rebuildSalesTotals(client: ReturnType<typeof getAuthenticatedSupabaseClient>) {
   const { error } = await client.rpc("rebuild_ticket_product_sales_totals");
   if (error) {
     throw new Error(error.message || "売上集計の再構築に失敗しました");
   }
 }
 
-async function fetchImport(client: ReturnType<typeof getSupabaseServerClient>, importId: string) {
+async function fetchImport(client: ReturnType<typeof getAuthenticatedSupabaseClient>, importId: string) {
   const { data, error } = await client
     .from("ticket_ocr_imports")
     .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, archived_at, ocr_raw_text, ocr_confidence, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
@@ -188,7 +188,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ message: "取込IDが必要です" }, { status: 400 });
     }
 
-    const client = getSupabaseServerClient();
+    const client = getAuthenticatedSupabaseClient(request);
 
     const action = String(body.action ?? "").trim();
     if (action === "confirm") {
@@ -384,9 +384,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuthenticatedApiUser(_request);
+    await requireAuthenticatedApiUser(request);
     const params = await context.params;
     const importId = String(params.id ?? "").trim();
 
@@ -394,7 +394,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
       return NextResponse.json({ message: "取込IDが必要です" }, { status: 400 });
     }
 
-    const client = getSupabaseServerClient();
+    const client = getAuthenticatedSupabaseClient(request);
     const { error } = await client
       .from("ticket_ocr_imports")
       .update({

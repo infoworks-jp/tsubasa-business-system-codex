@@ -7,8 +7,8 @@ import type {
   OcrImportSavedRow,
 } from "@/lib/ocr/import-types";
 import { parseBusinessDate, parseRows, toNumber, toSavedRow, toQueueStatusOrder, type OcrImportDbRow } from "@/lib/ocr/import-utils";
+import { getAuthenticatedSupabaseClient } from "@/lib/original-sources/server";
 import { SupabaseNotConfiguredError } from "@/lib/products/repository";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,7 +67,7 @@ function toImportRecord(row: ImportHeaderRow): OcrImportRecord {
   };
 }
 
-async function rebuildSalesTotals(client: ReturnType<typeof getSupabaseServerClient>) {
+async function rebuildSalesTotals(client: ReturnType<typeof getAuthenticatedSupabaseClient>) {
   const { error } = await client.rpc("rebuild_ticket_product_sales_totals");
   if (error) {
     throw new Error(error.message || "売上集計の再構築に失敗しました");
@@ -138,7 +138,7 @@ function mapErrorResponse(error: unknown) {
 export async function GET(request: NextRequest) {
   try {
     await requireAuthenticatedApiUser(request);
-    const client = getSupabaseServerClient();
+    const client = getAuthenticatedSupabaseClient(request);
     const { data, error } = await client
       .from("ticket_ocr_imports")
       .select("id, image_name, engine_id, ocr_state, queue_status, business_date, created_at, error_message, total_count, processed_count, needs_review_count, archived_at, ocr_raw_text, ocr_confidence, ticket_ocr_import_rows(id, product_name, quantity, amount, time_slot, product_id, status, review_reason)")
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    const client = getSupabaseServerClient();
+    const client = getAuthenticatedSupabaseClient(request);
 
     const { data: importData, error: importError } = await client
       .from("ticket_ocr_imports")
