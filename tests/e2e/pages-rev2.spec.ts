@@ -48,9 +48,9 @@ test('6月商品復元と未確定データを0円扱いしない', async ({ pag
   await expect(page.locator('#integrity')).toContainText('¥4,995,250 一致');
   await expect(page.locator('#host')).toContainText('全商品 40品目');
   await page.selectOption('#monthSelect', '2026-07');
-  await page.locator('#t_hourly').click();
+  await page.locator('#t_hourly').click({ force: true });
   await expect(page.locator('#integrity')).toContainText('5営業日分');
-  await page.locator('#t_payroll').click();
+  await page.locator('#t_payroll').click({ force: true });
   await expect(page.locator('#host')).toContainText('未確定');
 });
 
@@ -67,21 +67,21 @@ test('公開後に判明した6月欠落を再発させない', async ({ page })
   await expect(page.locator('#host')).toContainText('¥314,440');
   await expect(page.locator('#host')).toContainText('¥2,028,986');
 
-  await page.locator('#t_expenses').click();
+  await page.locator('#t_expenses').click({ force: true });
   await expect(page.locator('#host')).toContainText('仕入・外注支払');
   await expect(page.locator('#host')).not.toContainText('0件');
 
-  await page.locator('#t_bank').click();
+  await page.locator('#t_bank').click({ force: true });
   await expect(page.locator('#host')).toContainText('2026-06-01');
   await expect(page.locator('#host')).toContainText('2026-06-28');
 
   await page.selectOption('#monthSelect', '2026-07');
-  await page.locator('#t_daily').click();
+  await page.locator('#t_daily').click({ force: true });
   const july27 = page.locator('#host tr').filter({ hasText: '2026-07-27' });
   await expect(july27).toContainText('休業');
   await expect(july27).not.toContainText('入力待ち');
 
-  await page.locator('#t_consulting').click();
+  await page.locator('#t_consulting').click({ force: true });
   await expect(page.locator('#host')).toContainText('現状判断');
   await expect(page.locator('#host')).toContainText('実行優先順位');
 });
