@@ -111,7 +111,7 @@
       return [...map.values()].sort((a, b) => a.hour - b.hour).map((row) => ({
         ...row,
         hour: `${String(row.hour).padStart(2, "0")}:00`,
-        period: row.hour >= 11 && row.hour < 17 ? "昼" : row.hour >= 17 && row.hour < 22 ? "夜" : "深夜"
+        period: row.hour >= 10 && row.hour <= 17 ? "昼" : row.hour >= 18 && row.hour <= 23 ? "夜" : row.hour <= 2 ? "深夜" : "その他"
       }));
     }
 
@@ -188,18 +188,24 @@
           hourly_match: hourDays.has(row.id) && hour + (row.settlement_amount || 0) === row.total_sales
         };
       });
-      const hourlyComparable = rows.length > 0 && rows.every((row) => hourDays.has(row.id));
+      const operatingRows = rows.filter((row) => row.total_sales > 0);
+      const hourlyComparable = operatingRows.length > 0 && operatingRows.every((row) => hourDays.has(row.id));
+      const hourlyDetailsMatch = details.filter((row) => row.daily > 0).every((row) => row.hourly_match);
+      const scopedSettlementAdjustment = rows
+        .filter((row) => hourDays.has(row.id))
+        .reduce((sum, row) => sum + (row.settlement_amount || 0), 0);
+      const pending = rows.filter((row) => row.total_sales === 0 && !/休/.test(row.notes || "")).length;
       return {
         daily: dailyTotal,
         products: productComplete ? productTotal : null,
         hourly: hourList.length ? hourTotal : null,
-        settlement_adjustment: rows.reduce((sum, row) => sum + (row.settlement_amount || 0), 0),
-        hourly_net: hourList.length ? hourTotal + rows.reduce((sum, row) => sum + (row.settlement_amount || 0), 0) : null,
+        settlement_adjustment: hourList.length ? scopedSettlementAdjustment : null,
+        hourly_net: hourList.length ? hourTotal + scopedSettlementAdjustment : null,
         product_match: productComplete && dailyTotal === productTotal,
-        hourly_match: hourlyComparable && details.every((row) => row.hourly_match),
-        matched: productComplete && dailyTotal === productTotal && hourlyComparable && details.every((row) => row.hourly_match),
+        hourly_match: hourlyComparable && hourlyDetailsMatch,
+        matched: productComplete && dailyTotal === productTotal && hourlyComparable && hourlyDetailsMatch && pending === 0,
         holidays: rows.filter((row) => row.total_sales === 0 && /休/.test(row.notes || "")).length,
-        pending: rows.filter((row) => row.total_sales === 0 && !/休/.test(row.notes || "")).length,
+        pending,
         missing_product_dates: productComplete ? [] : ["商品別原本未登録"],
         source_scope: {
           product: productComplete ? "月全体" : "原本未登録",
@@ -209,16 +215,45 @@
       };
     }
 
+    function salesDate(row) {
+      const match = String(row.handwritten_note || "").match(/(\d{1,2})\/(\d{1,2})\s*売上/);
+      if (!match) return null;
+      const transaction = new Date(`${row.transaction_date}T00:00:00Z`);
+      let year = transaction.getUTCFullYear();
+      const month = Number(match[1]);
+      if (month > transaction.getUTCMonth() + 2) year -= 1;
+      return `${year}-${String(month).padStart(2, "0")}-${String(Number(match[2])).padStart(2, "0")}`;
+    }
+
     function bank(scope) {
-      return source.bank_transactions.filter((row) => inScope(row.transaction_date, scope)).map((row) => ({
-        deposit_date: row.transaction_date,
-        sales_date: row.matched_sales_date || "",
-        amount: number(row.deposit_amount),
-        daily_sales: null,
-        result: row.match_status === "matched" ? "一致" : "要確認",
-        breakdown: row.description || "",
-        source: row.source_reference || ""
-      }));
+      const dailyByDate = new Map(daily.map((row) => [row.business_date, row]));
+      const groups = new Map();
+      for (const row of source.bank_transactions) {
+        if (number(row.deposit_amount) <= 0 || !/売上入金/.test(row.estimated_category || "")) continue;
+        const date = salesDate(row);
+        if (!date || !months.includes(monthOf(date)) || !inScope(date, scope)) continue;
+        const current = groups.get(date) || { sales_date: date, amount: 0, deposits: [], notes: [], sources: [] };
+        current.amount += number(row.deposit_amount) || 0;
+        current.deposits.push(row.transaction_date);
+        current.notes.push(row.handwritten_note || row.description || "");
+        current.sources.push(row.source_reference || "");
+        groups.set(date, current);
+      }
+      return [...groups.values()].sort((a, b) => a.sales_date.localeCompare(b.sales_date)).map((row) => {
+        const journal = dailyByDate.get(row.sales_date);
+        const expected = journal ? journal.total_sales : null;
+        const diff = expected == null ? null : row.amount - expected;
+        return {
+          deposit_date: [...new Set(row.deposits)].join("、"),
+          sales_date: row.sales_date,
+          amount: row.amount,
+          daily_sales: expected,
+          difference: diff,
+          result: expected == null ? "日別未登録" : diff === 0 ? "一致" : `差額 ${diff > 0 ? "+" : ""}${diff.toLocaleString("ja-JP")}円`,
+          breakdown: row.notes.join("＋"),
+          source: [...new Set(row.sources)].join("、")
+        };
+      });
     }
 
     return { months, monthly, overview, scopedDaily, products, hourly, quality, bank, source };
@@ -237,12 +272,13 @@
     }
     if (url === "/api/monthly") return clone(value.monthly());
     if (url === "/api/expenses") {
-      return clone(value.source.expenses.filter((row) => row.is_canonical !== false).map((row) => ({
-        date: row.expense_date,
-        category: row.category,
-        amount: number(row.amount),
-        description: row.description || "",
-        status: row.status
+      return clone(value.source.bank_transactions.filter((row) => number(row.withdrawal_amount) > 0).map((row) => ({
+        date: row.transaction_date,
+        category: row.estimated_category || "未分類",
+        amount: number(row.withdrawal_amount),
+        description: row.handwritten_note || row.description || "",
+        status: row.match_status === "matched" ? "確認済み" : "要確認",
+        source: row.source_reference || ""
       })));
     }
     if (url === "/api/payroll") return clone(value.source.payroll.map((row) => ({
@@ -251,8 +287,12 @@
       employee_gross: number(row.employee_gross),
       parttime_gross: number(row.parttime_gross),
       salary_paid: number(row.gross_pay),
+      social_insurance: number(row.employer_cost),
+      total_labor: number(row.gross_pay) + (number(row.employer_cost) || 0),
+      total_labor_rate: row.monthly_sales ? (number(row.gross_pay) + (number(row.employer_cost) || 0)) / number(row.monthly_sales) : null,
       labor_cost_rate: number(row.labor_cost_rate),
       sales_minus_labor: number(row.sales_minus_labor),
+      sales_minus_total_labor: row.monthly_sales ? number(row.monthly_sales) - number(row.gross_pay) - (number(row.employer_cost) || 0) : null,
       status: row.status
     })));
     const match = url.match(/^\/api\/(overview|daily|products|hourly|bank|quality)\/(all|\d{4}-\d{2})$/);
