@@ -72,10 +72,14 @@ test('公開後に判明した6月欠落を再発させない', async ({ page })
   await expect(page.locator('#host')).not.toContainText('0件');
 
   await page.locator('#t_bank').click({ force: true });
-  await expect(page.locator('#host')).toContainText('2026-06-01');
   await expect(page.locator('#host')).toContainText('2026-06-28');
   const june2Deposit = page.locator('#host tr').filter({ hasText: '2026-06-02' }).filter({ hasText: '¥134,620' });
   await expect(june2Deposit).toContainText('一致');
+  const june3Deposit = page.locator('#host tr').filter({ hasText: '2026-06-03' }).filter({ hasText: '¥186,670' });
+  await expect(june3Deposit).toContainText('一致');
+  const june4Deposit = page.locator('#host tr').filter({ hasText: '2026-06-04' }).filter({ hasText: '¥99,950' });
+  await expect(june4Deposit).toContainText('一致');
+  await expect(page.locator('#host')).toContainText('売上日要確認');
 
   await page.selectOption('#monthSelect', '2026-07');
   await page.locator('#t_daily').click({ force: true });
