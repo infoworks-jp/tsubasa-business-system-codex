@@ -28,6 +28,16 @@ for (const view of views) {
   });
 }
 
+test('dashboard has June, July and cumulative totals', async ({ page }) => {
+  await page.goto('/#/kpi', { waitUntil: 'networkidle' });
+  await expect(page.getByRole('button', { name: '6月' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '7月' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '累計' })).toBeVisible();
+  await expect(page.locator('#content')).toContainText('￥4,995,250');
+  await expect(page.locator('#content')).toContainText('￥4,917,050');
+  await expect(page.locator('#content')).toContainText('￥9,912,300');
+});
+
 test('QA release gate is zero', async ({ page }) => {
   await page.goto('/#/qa', { waitUntil: 'networkidle' });
   await expect(page.getByText('NG合計').locator('..').locator('strong')).toHaveText('0件');
