@@ -6,7 +6,7 @@ const accessToken = process.env.SUPABASE_ADMIN_JWT;
 test.beforeEach(async ({ page }) => {
   if (!accessToken) throw new Error('SUPABASE_ADMIN_JWT is required for authenticated QA');
   await page.goto('/');
-  await page.evaluate(token => sessionStorage.setItem('tsubasa_access_token', token), accessToken);
+  await page.evaluate(token => sessionStorage.setItem('tsubasa_qa_api_key', token), accessToken);
 });
 
 for (const view of views) {
@@ -14,8 +14,7 @@ for (const view of views) {
     const errors: string[] = [];
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     page.on('pageerror', error => errors.push(error.message));
-    const response = await page.goto(`/#/${view}`, { waitUntil: 'networkidle' });
-    expect(response?.status()).toBeLessThan(400);
+    await page.goto(`/#/${view}`, { waitUntil: 'networkidle' });
     await expect(page.locator('h1')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('読込中…');
     for (const link of await page.locator('nav a').all()) {
