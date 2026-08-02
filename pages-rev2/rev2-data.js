@@ -14,15 +14,23 @@
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
   async function select(table) {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
-      headers: {
-        apikey: PUBLISHABLE_KEY,
-        Authorization: `Bearer ${PUBLISHABLE_KEY}`,
-        "Accept-Profile": "rev2"
-      }
-    });
-    if (!response.ok) throw new Error(`${table}の取得に失敗しました（${response.status}）`);
-    return response.json();
+    const rows = [];
+    const pageSize = 100;
+    for (let start = 0; ; start += pageSize) {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+        headers: {
+          apikey: PUBLISHABLE_KEY,
+          Authorization: `Bearer ${PUBLISHABLE_KEY}`,
+          "Accept-Profile": "rev2",
+          "Range-Unit": "items",
+          Range: `${start}-${start + pageSize - 1}`
+        }
+      });
+      if (!response.ok) throw new Error(`${table}の取得に失敗しました（${response.status}）`);
+      const page = await response.json();
+      rows.push(...page);
+      if (page.length < pageSize) return rows;
+    }
   }
 
   async function raw() {
