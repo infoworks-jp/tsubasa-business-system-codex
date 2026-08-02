@@ -1,10 +1,11 @@
 const SUPABASE_URL='https://spyopczqtxypqjbhylzf.supabase.co';
 const PUBLISHABLE_KEY='sb_publishable_0OHZyJkYkTjqJoIUGUAKNw_R1ZvEzUg';
-const routes=[['kpi','KPI'],['products','商品別'],['abc','ABC'],['weekday','曜日'],['hourly','時間帯'],['monthly','月別'],['consulting','経営コンサル'],['qa','品質検証'],['bank','通帳']];
+const routes=[['kpi','ダッシュボード'],['products','商品別'],['abc','ABC'],['weekday','曜日'],['hourly','時間帯'],['monthly','月別'],['consulting','経営コンサル'],['qa','品質検証'],['bank','通帳']];
 const yen=new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0});
 const num=new Intl.NumberFormat('ja-JP');
 const qaKey=(['127.0.0.1','localhost'].includes(location.hostname)&&sessionStorage.getItem('tsubasa_qa_api_key'))||'';
 let data=null;
+let dashboardScope='2026-07';
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -27,8 +28,21 @@ function analyze(raw){
 
 const table=(headers,rows)=>`<div class="panel table-wrap"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 const metrics=items=>`<div class="metrics">${items.map(([l,v])=>`<div class="metric"><span>${esc(l)}</span><strong>${v}</strong></div>`).join('')}</div>`;
+
+function dashboardRow(d,scope){
+ const rows=scope==='all'?d.months.filter(m=>['2026-06','2026-07'].includes(m.month)):d.months.filter(m=>m.month===scope);
+ const sales=rows.reduce((s,m)=>s+m.sales,0),days=rows.reduce((s,m)=>s+m.days,0),customers=rows.reduce((s,m)=>s+m.customers,0),expenses=rows.reduce((s,m)=>s+m.expenses,0);
+ return{sales,days,customers,expenses,avg:customers?sales/customers:null,daily:days?sales/days:null};
+}
+function dashboardView(d){
+ const x=dashboardRow(d,dashboardScope),summary=['2026-06','2026-07','all'].map(scope=>{const r=dashboardRow(d,scope);return[scope==='all'?'累計':scope.replace('2026-','')+'月',yen.format(r.sales),num.format(r.days)+'日',num.format(r.customers),r.avg==null?'対象外':yen.format(r.avg),r.daily==null?'対象外':yen.format(r.daily)]});
+ return `<div class="scope-tabs"><button data-scope="2026-06" class="${dashboardScope==='2026-06'?'active':''}">6月</button><button data-scope="2026-07" class="${dashboardScope==='2026-07'?'active':''}">7月</button><button data-scope="all" class="${dashboardScope==='all'?'active':''}">累計</button></div>`+
+ metrics([['売上',yen.format(x.sales)],['営業日',num.format(x.days)+'日'],['客数',num.format(x.customers)],['客単価',x.avg==null?'対象外':yen.format(x.avg)],['1日平均',x.daily==null?'対象外':yen.format(x.daily)],['通帳出金',yen.format(x.expenses)]])+
+ `<h2 class="section-title">6月・7月・累計</h2>`+table(['期間','売上','営業日','客数','客単価','1日平均'],summary);
+}
+
 function render(){const route=(location.hash.replace('#/','')||'kpi');$('#nav').innerHTML=routes.map(([id,label])=>`<a class="${id===route?'active':''}" href="#/${id}">${label}</a>`).join('');const d=data;let out=`<h1>${esc(routes.find(r=>r[0]===route)?.[1]||'KPI')}</h1>`;
- if(route==='kpi')out+=metrics([['売上',yen.format(d.kpi.sales)],['営業日',`${num.format(d.kpi.days)}日`],['客数',num.format(d.kpi.customers)],['客単価',d.kpi.avg==null?'評価不能':yen.format(d.kpi.avg)],['通帳未照合',`${d.qa.unmatched}件`],['QA NG',`${d.qa.failures}件`]]);
+ if(route==='kpi')out+=dashboardView(d);
  if(route==='products')out+=table(['商品コード','商品名','分類','数量','売上'],d.products.map(r=>[esc(r.code),esc(r.name),esc(r.category),num.format(r.quantity),yen.format(r.sales)]));
  if(route==='abc')out+=table(['商品','数量','売上','累計構成比','区分'],d.abc.map(r=>[esc(r.name),num.format(r.quantity),yen.format(r.sales),`${(r.share*100).toFixed(1)}%`,r.klass]));
  if(route==='weekday')out+=table(['曜日','営業日','売上','1日平均'],d.weekdays.map(r=>[r.name,num.format(r.days),yen.format(r.sales),r.days?yen.format(r.sales/r.days):'対象外']));
@@ -38,6 +52,7 @@ function render(){const route=(location.hash.replace('#/','')||'kpi');$('#nav').
  if(route==='qa')out+=metrics([['NG合計',`${d.qa.failures}件`],['商品重複',`${d.qa.duplicates}件`],['OCR失敗',`${d.qa.failedOcr}件`],['通帳未照合',`${d.qa.unmatched}件`],['曜日一致',d.qa.weekdayOk?'OK':'NG'],['ABC一致',d.qa.abcOk?'OK':'NG']])+table(['検査','対象','日別/売上','比較値','判定'],[...d.qa.monthChecks.map(r=>['月別商品一致',r.month,yen.format(r.sales),yen.format(r.products),r.ok?'<span class="ok">OK</span>':'<span class="ng">NG</span>']),...d.qa.hourChecks.map(r=>['時間帯一致',r.date,yen.format(r.daily),`${yen.format(r.gross)} ${r.settlement<0?'-':'+'} ${yen.format(Math.abs(r.settlement))}`,r.ok?'<span class="ok">OK</span>':'<span class="ng">NG</span>'])]);
  if(route==='bank')out+=table(['日付','摘要','入金','出金','分類','照合'],d.raw.bank.map(r=>[r.transaction_date,esc(r.description),yen.format(r.deposit_amount),yen.format(r.withdrawal_amount),esc(r.estimated_category||''),r.match_status==='matched'?'<span class="ok">OK</span>':'<span class="ng">要確認</span>']));
  $('#content').innerHTML=out;
+ if(route==='kpi')document.querySelectorAll('[data-scope]').forEach(button=>button.addEventListener('click',()=>{dashboardScope=button.dataset.scope;render()}));
 }
 async function start(){try{data=await load();render()}catch(e){$('#content').innerHTML=`<div class="error-card">${esc(e.message)}</div>`}}
 window.addEventListener('hashchange',()=>data&&render());start();
