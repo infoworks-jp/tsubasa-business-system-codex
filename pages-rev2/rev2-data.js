@@ -228,13 +228,35 @@
     function bank(scope) {
       const dailyByDate = new Map(daily.map((row) => [row.business_date, row]));
       const groups = new Map();
-      for (const row of source.bank_transactions) {
-        if (number(row.deposit_amount) <= 0 || !/売上入金/.test(row.estimated_category || "")) continue;
+      const unresolved = [];
+      const bankDeposits = source.bank_transactions.filter((row) =>
+        number(row.deposit_amount) > 0 && /売上入金/.test(row.estimated_category || "")
+      );
+      const exactSalesDates = new Set(bankDeposits.filter((row) => {
+        const journal = dailyByDate.get(row.transaction_date);
+        return journal && journal.total_sales === (number(row.deposit_amount) || 0);
+      }).map((row) => row.transaction_date));
+      for (const row of bankDeposits) {
         const depositAmount = number(row.deposit_amount) || 0;
         const sameDayJournal = dailyByDate.get(row.transaction_date);
-        const date = sameDayJournal && sameDayJournal.total_sales === depositAmount
+        const exactSameDay = sameDayJournal && sameDayJournal.total_sales === depositAmount;
+        const notedDate = salesDate(row);
+        if (!exactSameDay && notedDate && exactSalesDates.has(notedDate)) {
+          if (inScope(row.transaction_date, scope)) unresolved.push({
+            deposit_date: row.transaction_date,
+            sales_date: "",
+            amount: depositAmount,
+            daily_sales: null,
+            difference: null,
+            result: "売上日要確認",
+            breakdown: row.handwritten_note || row.description || "",
+            source: row.source_reference || ""
+          });
+          continue;
+        }
+        const date = exactSameDay
           ? row.transaction_date
-          : salesDate(row);
+          : notedDate;
         if (!date || !months.includes(monthOf(date)) || !inScope(date, scope)) continue;
         const current = groups.get(date) || { sales_date: date, amount: 0, deposits: [], notes: [], sources: [] };
         current.amount += depositAmount;
@@ -243,7 +265,7 @@
         current.sources.push(row.source_reference || "");
         groups.set(date, current);
       }
-      return [...groups.values()].sort((a, b) => a.sales_date.localeCompare(b.sales_date)).map((row) => {
+      const matchedRows = [...groups.values()].sort((a, b) => a.sales_date.localeCompare(b.sales_date)).map((row) => {
         const journal = dailyByDate.get(row.sales_date);
         const expected = journal ? journal.total_sales : null;
         const diff = expected == null ? null : row.amount - expected;
@@ -258,6 +280,9 @@
           source: [...new Set(row.sources)].join("、")
         };
       });
+      return [...matchedRows, ...unresolved].sort((a, b) =>
+        `${a.sales_date || a.deposit_date}`.localeCompare(`${b.sales_date || b.deposit_date}`)
+      );
     }
 
     return { months, monthly, overview, scopedDaily, products, hourly, quality, bank, source };
