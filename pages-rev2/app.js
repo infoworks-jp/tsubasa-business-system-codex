@@ -3,13 +3,14 @@ const PUBLISHABLE_KEY='sb_publishable_0OHZyJkYkTjqJoIUGUAKNw_R1ZvEzUg';
 const routes=[['kpi','KPI'],['products','商品別'],['abc','ABC'],['weekday','曜日'],['hourly','時間帯'],['monthly','月別'],['consulting','経営コンサル'],['qa','品質検証'],['bank','通帳']];
 const yen=new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0});
 const num=new Intl.NumberFormat('ja-JP');
-let token=sessionStorage.getItem('tsubasa_access_token')||'';
+const qaKey=(['127.0.0.1','localhost'].includes(location.hostname)&&sessionStorage.getItem('tsubasa_qa_api_key'))||'';
+let token=qaKey||sessionStorage.getItem('tsubasa_access_token')||'';
 let data=null;
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 async function auth(email,password){const r=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const j=await r.json();if(!r.ok)throw new Error('ログイン情報を確認してください');return j.access_token}
-async function query(table,select='*'){const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}`,{headers:{apikey:PUBLISHABLE_KEY,Authorization:`Bearer ${token}`,'Accept-Profile':'rev2'}});if(r.status===401)throw new Error('ログインの有効期限が切れました');if(!r.ok)throw new Error(`${table}: ${r.status}`);return r.json()}
+async function query(table,select='*'){const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}`,{headers:{apikey:qaKey||PUBLISHABLE_KEY,Authorization:`Bearer ${token}`,'Accept-Profile':'rev2'}});if(r.status===401)throw new Error('ログインの有効期限が切れました');if(!r.ok)throw new Error(`${table}: ${r.status}`);return r.json()}
 async function load(){const [daily,products,hours,bank,expenses,payroll,documents,master]=await Promise.all([query('daily_journal'),query('journal_products'),query('journal_hours'),query('bank_transactions'),query('expenses'),query('payroll'),query('documents'),query('product_master')]);return analyze({daily,products,hours,bank,expenses,payroll,documents,master})}
 
 function analyze(raw){
