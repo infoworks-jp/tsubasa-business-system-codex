@@ -230,10 +230,14 @@
       const groups = new Map();
       for (const row of source.bank_transactions) {
         if (number(row.deposit_amount) <= 0 || !/売上入金/.test(row.estimated_category || "")) continue;
-        const date = salesDate(row);
+        const depositAmount = number(row.deposit_amount) || 0;
+        const sameDayJournal = dailyByDate.get(row.transaction_date);
+        const date = sameDayJournal && sameDayJournal.total_sales === depositAmount
+          ? row.transaction_date
+          : salesDate(row);
         if (!date || !months.includes(monthOf(date)) || !inScope(date, scope)) continue;
         const current = groups.get(date) || { sales_date: date, amount: 0, deposits: [], notes: [], sources: [] };
-        current.amount += number(row.deposit_amount) || 0;
+        current.amount += depositAmount;
         current.deposits.push(row.transaction_date);
         current.notes.push(row.handwritten_note || row.description || "");
         current.sources.push(row.source_reference || "");
