@@ -39,7 +39,7 @@ jobs:
         run: python3 -m http.server 4173 --directory pages-rev2 &
       - name: Playwright QA
         env:
-          SUPABASE_ADMIN_JWT: ${{ secrets.SUPABASE_ADMIN_JWT }}
+          SUPABASE_ADMIN_JWT: ${{ secrets.SUPABASE_ADMIN_JWT || secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: pnpm exec playwright test --config=playwright.pages.config.ts
       - uses: actions/upload-artifact@v4
         if: always()
