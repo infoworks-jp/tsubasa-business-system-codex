@@ -1,6 +1,8 @@
 name: Rev2 QA and Pages
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [develop/rev2, main]
     paths:
