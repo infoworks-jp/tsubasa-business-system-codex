@@ -8,20 +8,11 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="login" class="login-page">
-    <section class="login-brand"><div class="mark">翼</div><div><h1>味一番つばさ</h1><p>TSUBASA Rev.2 経営管理</p></div></section>
-    <form id="login-form" class="login-card">
-      <h2>管理者ログイン</h2>
-      <label>メールアドレス<input id="email" type="email" autocomplete="email" required></label>
-      <label>パスワード<input id="password" type="password" autocomplete="current-password" required></label>
-      <button type="submit">ログイン</button><p id="login-error" role="alert"></p>
-    </form>
-  </div>
-  <div id="app" class="shell" hidden>
+  <div id="app" class="shell">
     <aside><div class="brand"><span class="mark">翼</span><div><strong>味一番つばさ</strong><small>TSUBASA Rev.2</small></div></div>
-      <nav id="nav"></nav><button id="logout" class="logout">ログアウト</button>
+      <nav id="nav"></nav>
     </aside>
-    <main><header><span>確定データ直接参照</span><b>管理者</b></header><section id="content" class="content"><p>読込中…</p></section></main>
+    <main><header><span>確定データ直接参照</span><b>TSUBASA Rev.2</b></header><section id="content" class="content"><p>読込中…</p></section></main>
   </div>
   <script type="module" src="app.js"></script>
 </body>

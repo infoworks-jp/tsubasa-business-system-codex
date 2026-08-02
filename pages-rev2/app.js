@@ -4,13 +4,11 @@ const routes=[['kpi','KPI'],['products','商品別'],['abc','ABC'],['weekday','�
 const yen=new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0});
 const num=new Intl.NumberFormat('ja-JP');
 const qaKey=(['127.0.0.1','localhost'].includes(location.hostname)&&sessionStorage.getItem('tsubasa_qa_api_key'))||'';
-let token=qaKey||sessionStorage.getItem('tsubasa_access_token')||'';
 let data=null;
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-async function auth(email,password){const r=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const j=await r.json();if(!r.ok)throw new Error('ログイン情報を確認してください');return j.access_token}
-async function query(table,select='*'){const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}`,{headers:{apikey:qaKey||PUBLISHABLE_KEY,Authorization:`Bearer ${token}`,'Accept-Profile':'rev2'}});if(r.status===401)throw new Error('ログインの有効期限が切れました');if(!r.ok)throw new Error(`${table}: ${r.status}`);return r.json()}
+async function query(table,select='*'){const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}`,{headers:{apikey:qaKey||PUBLISHABLE_KEY,Authorization:`Bearer ${qaKey||PUBLISHABLE_KEY}`,'Accept-Profile':'rev2'}});if(r.status===401)throw new Error('公開データの取得権限がありません');if(!r.ok)throw new Error(`${table}: ${r.status}`);return r.json()}
 async function load(){const [daily,products,hours,bank,expenses,payroll,documents,master]=await Promise.all([query('daily_journal'),query('journal_products'),query('journal_hours'),query('bank_transactions'),query('expenses'),query('payroll'),query('documents'),query('product_master')]);return analyze({daily,products,hours,bank,expenses,payroll,documents,master})}
 
 function analyze(raw){
@@ -41,6 +39,5 @@ function render(){const route=(location.hash.replace('#/','')||'kpi');$('#nav').
  if(route==='bank')out+=table(['日付','摘要','入金','出金','分類','照合'],d.raw.bank.map(r=>[r.transaction_date,esc(r.description),yen.format(r.deposit_amount),yen.format(r.withdrawal_amount),esc(r.estimated_category||''),r.match_status==='matched'?'<span class="ok">OK</span>':'<span class="ng">要確認</span>']));
  $('#content').innerHTML=out;
 }
-async function start(){if(!token){$('#login').hidden=false;$('#app').hidden=true;return}$('#login').hidden=true;$('#app').hidden=false;try{data=await load();render()}catch(e){sessionStorage.removeItem('tsubasa_access_token');token='';$('#app').hidden=true;$('#login').hidden=false;$('#login-error').textContent=e.message}}
-$('#login-form').addEventListener('submit',async e=>{e.preventDefault();$('#login-error').textContent='確認中…';try{token=await auth($('#email').value,$('#password').value);sessionStorage.setItem('tsubasa_access_token',token);await start()}catch(err){$('#login-error').textContent=err.message}});
-$('#logout').addEventListener('click',()=>{sessionStorage.removeItem('tsubasa_access_token');token='';data=null;start()});window.addEventListener('hashchange',()=>data&&render());start();
+async function start(){try{data=await load();render()}catch(e){$('#content').innerHTML=`<div class="error-card">${esc(e.message)}</div>`}}
+window.addEventListener('hashchange',()=>data&&render());start();
