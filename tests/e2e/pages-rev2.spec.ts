@@ -92,6 +92,14 @@ test('公開後に判明した6月欠落を再発させない', async ({ page })
   await expect(page.locator('#host')).toContainText('実行優先順位');
 });
 
+test('7月通帳を取得上限で欠落させない', async ({ page }) => {
+  await page.selectOption('#monthSelect', '2026-07');
+  await page.locator('#t_expenses').click({ force: true });
+  await expect(page.locator('#host')).toContainText('2026-07-31');
+  await expect(page.locator('#host')).toContainText('¥5,781,138');
+  await expect(page.locator('#host')).toContainText('60件');
+});
+
 test('404 fallback', async ({ page }) => {
   const response = await page.goto('/404.html');
   expect(response?.status()).toBeLessThan(400);
