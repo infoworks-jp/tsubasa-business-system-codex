@@ -17,6 +17,7 @@ for (const view of views) {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`/#/${view}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#content h1')).toBeVisible();
+    await expect(page.locator('#login')).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('読込中…');
     for (const link of await page.locator('nav a').all()) {
       const href = await link.getAttribute('href');
