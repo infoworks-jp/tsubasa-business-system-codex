@@ -1,0 +1,65 @@
+name: Rev2 QA and Pages
+
+on:
+  push:
+    branches: [develop/rev2, main]
+    paths:
+      - 'pages-rev2/**'
+      - 'tests/e2e/pages-rev2.spec.ts'
+      - 'playwright.pages.config.ts'
+      - '.github/workflows/rev2-qa-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Start static app
+        run: python3 -m http.server 4173 --directory pages-rev2 &
+      - name: Playwright QA
+        env:
+          SUPABASE_ADMIN_JWT: ${{ secrets.SUPABASE_ADMIN_JWT }}
+        run: pnpm exec playwright test --config=playwright.pages.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rev2-playwright-evidence
+          path: |
+            playwright-report
+            test-results/pages-rev2
+          retention-days: 30
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: qa
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-rev2
+      - id: deployment
+        uses: actions/deploy-pages@v4
