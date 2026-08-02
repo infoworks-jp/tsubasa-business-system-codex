@@ -42,10 +42,11 @@ for (const [tab, label] of tabs) {
   }
 }
 
-test('未確定データを0円扱いしない', async ({ page }) => {
+test('6月商品復元と未確定データを0円扱いしない', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-06');
   await page.locator('#t_products').click();
-  await expect(page.locator('#integrity')).toContainText('原本未登録');
+  await expect(page.locator('#integrity')).toContainText('¥4,995,250 一致');
+  await expect(page.locator('#host')).toContainText('全商品 40品目');
   await page.selectOption('#monthSelect', '2026-07');
   await page.locator('#t_hourly').click();
   await expect(page.locator('#integrity')).toContainText('5営業日分');
