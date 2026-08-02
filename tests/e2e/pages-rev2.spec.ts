@@ -7,6 +7,7 @@ test.beforeEach(async ({ page }) => {
   if (!accessToken) throw new Error('SUPABASE_ADMIN_JWT is required for authenticated QA');
   await page.goto('/');
   await page.evaluate(token => sessionStorage.setItem('tsubasa_qa_api_key', token), accessToken);
+  await page.reload({ waitUntil: 'networkidle' });
 });
 
 for (const view of views) {
