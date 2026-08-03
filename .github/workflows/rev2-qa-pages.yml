@@ -59,6 +59,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Add weekday and Japanese holiday labels
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('pages-rev2/index.html')
+          html = path.read_text(encoding='utf-8')
+          script = '<script src="./holiday-enhancements.js?v=20260803-1"></script>'
+          if script not in html:
+              html = html.replace('</body>', script + '</body>')
+              path.write_text(html, encoding='utf-8')
+          PY
       - uses: actions/configure-pages@v5
         with:
           enablement: true
