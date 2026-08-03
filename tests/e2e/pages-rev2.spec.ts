@@ -15,13 +15,16 @@ test.beforeEach(async ({ page }) => {
 
 test('14タグの名称・順番とDB基準数字', async ({ page }) => {
   await expect(page.locator('.tabs button')).toHaveText(tabs.map(([, label]) => label));
-  await expect(page.locator('#monthSelect option')).toHaveCount(2);
+  await expect(page.locator('#monthSelect option')).toHaveCount(3);
+  await expect(page.locator('#monthSelect option')).toHaveText(['2026年6月', '2026年7月', '2026年8月']);
   await page.selectOption('#monthSelect', '2026-06');
   await expect(page.locator('#cards')).toContainText('¥4,995,250');
   await page.selectOption('#monthSelect', '2026-07');
   await expect(page.locator('#cards')).toContainText('¥4,917,050');
+  await page.selectOption('#monthSelect', '2026-08');
+  await expect(page.locator('#cards')).toContainText('¥459,990');
   await page.locator('#scopeAll').click();
-  await expect(page.locator('#cards')).toContainText('¥9,912,300');
+  await expect(page.locator('#cards')).toContainText('¥10,372,290');
 });
 
 for (const [tab, label] of tabs) {
