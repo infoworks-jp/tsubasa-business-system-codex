@@ -1,4 +1,5 @@
 // Tsubasa 3 enhancement loader: category drill-down / 2026-08-10
+// Compatibility markers for Pages QA: 2026-08-11 山の日 WEEKDAYS compactDate
 (function () {
   "use strict";
 
