@@ -1,4 +1,4 @@
-// Tsubasa 3 enhancement loader: category drill-down / 2026-08-10
+// Tsubasa 3 enhancement loader: category drill-down + dashboard quick tabs / 2026-08-10
 // Compatibility markers for Pages QA: 2026-08-11 山の日 WEEKDAYS compactDate
 (function () {
   "use strict";
@@ -13,7 +13,35 @@
     });
   }
 
+  function installDashboardQuickTabs() {
+    const tabs = document.querySelector(".tabs");
+    if (!tabs || document.getElementById("t_procurement_detail")) return;
+
+    const procurement = document.createElement("button");
+    procurement.id = "t_procurement_detail";
+    procurement.textContent = "仕入数量・変動原価";
+    procurement.title = "請求書明細を1行ずつ集計した月別仕入数量・変動原価";
+    procurement.onclick = () => { window.location.href = "./procurement-detail.html"; };
+
+    const weekdayDaypart = document.createElement("button");
+    weekdayDaypart.id = "t_weekday_daypart";
+    weekdayDaypart.textContent = "曜日×昼・夜・深夜";
+    weekdayDaypart.title = "曜日別の昼・夜・深夜売上、売上ランキング、曜日特性";
+    weekdayDaypart.onclick = () => { window.location.href = "./weekday-daypart.html"; };
+
+    const expensesTab = document.getElementById("t_expenses");
+    if (expensesTab) {
+      expensesTab.insertAdjacentElement("afterend", procurement);
+      procurement.insertAdjacentElement("afterend", weekdayDaypart);
+    } else {
+      tabs.appendChild(procurement);
+      tabs.appendChild(weekdayDaypart);
+    }
+  }
+
   function installCategoryEnhancements() {
+    installDashboardQuickTabs();
+
     const categoryOf = function detailCategoryEnhanced(name, base) {
       const n = String(name || "");
       if (/つばさラーメン/.test(n)) return "つばさラーメン";
@@ -81,6 +109,7 @@
       .categoryBar{height:14px;background:#e8eef8;border-radius:4px;overflow:hidden}.categoryBar i{display:block;height:100%;background:#5b9bd5}
       .categoryShare{text-align:right;font-size:12px;color:#475569}.categoryArrow{font-size:12px;color:#4472c4;text-align:right}
       .categoryDetail{padding:0 10px 10px}.categoryDetail .sub{margin-bottom:7px}
+      #t_procurement_detail,#t_weekday_daypart{font-weight:800}
       @media(max-width:700px){.categoryDrill summary{grid-template-columns:1fr 90px 56px}.categoryBar{grid-column:1/-1;order:4}.categoryArrow{display:none}}
     `;
     document.head.appendChild(style);
