@@ -36,25 +36,36 @@ jobs:
           root = Path('pages-rev2')
           index = root / 'index.html'
           holiday = root / 'holiday-enhancements.js'
-          if not index.exists() or not holiday.exists():
+          fl = root / 'fl-dashboard.js'
+          if not index.exists() or not holiday.exists() or not fl.exists():
               raise SystemExit('Required Pages files are missing')
 
           html = index.read_text(encoding='utf-8')
           html = re.sub(r'<script src="\./holiday-enhancements\.js\?v=[^"]+"></script>', '', html)
-          script = '<script src="./holiday-enhancements.js?v=${{ github.sha }}"></script>'
-          html = html.replace('</body>', script + '\n</body>')
+          html = re.sub(r'<script src="\./fl-dashboard\.js\?v=[^"]+"></script>', '', html)
+          scripts = '\n'.join([
+              '<script src="./holiday-enhancements.js?v=${{ github.sha }}"></script>',
+              '<script src="./fl-dashboard.js?v=${{ github.sha }}"></script>'
+          ])
+          html = html.replace('</body>', scripts + '\n</body>')
           index.write_text(html, encoding='utf-8')
 
           js = holiday.read_text(encoding='utf-8')
           for required in ('2026-08-11', '山の日', 'WEEKDAYS', 'compactDate'):
               if required not in js:
                   raise SystemExit(f'Holiday enhancement is incomplete: {required}')
+          fl_js = fl.read_text(encoding='utf-8')
+          for required in ('F/L 経営指標', '__TSUBASA_FL_DIRECT__', '累計 F/L比率'):
+              if required not in fl_js:
+                  raise SystemExit(f'F/L dashboard is incomplete: {required}')
           PY
       - name: Static smoke check
         run: |
           node --check pages-rev2/holiday-enhancements.js
+          node --check pages-rev2/fl-dashboard.js
           grep -q 'holiday-enhancements.js' pages-rev2/index.html
-          grep -q '山の日' pages-rev2/holiday-enhancements.js
+          grep -q 'fl-dashboard.js' pages-rev2/index.html
+          grep -q 'F/L 経営指標' pages-rev2/fl-dashboard.js
       - uses: actions/configure-pages@v5
         if: github.ref == 'refs/heads/main'
         with:
@@ -89,18 +100,18 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 30); do
             html="$(curl -fsSL --max-time 20 "${SITE_URL}?verify=${GITHUB_SHA}" || true)"
-            if printf '%s' "$html" | grep -q 'holiday-enhancements.js'; then
-              js_url="${SITE_URL}holiday-enhancements.js?verify=${GITHUB_SHA}"
-              js="$(curl -fsSL --max-time 20 "$js_url" || true)"
-              if printf '%s' "$js" | grep -q '山の日' && printf '%s' "$js" | grep -q 'WEEKDAYS'; then
-                echo "Public verification passed: ${SITE_URL}"
+            if printf '%s' "$html" | grep -q 'holiday-enhancements.js' && printf '%s' "$html" | grep -q 'fl-dashboard.js'; then
+              holiday_js="$(curl -fsSL --max-time 20 "${SITE_URL}holiday-enhancements.js?verify=${GITHUB_SHA}" || true)"
+              fl_js="$(curl -fsSL --max-time 20 "${SITE_URL}fl-dashboard.js?verify=${GITHUB_SHA}" || true)"
+              if printf '%s' "$holiday_js" | grep -q '山の日' && printf '%s' "$fl_js" | grep -q 'F/L 経営指標' && printf '%s' "$fl_js" | grep -q '__TSUBASA_FL_DIRECT__'; then
+                echo "Public F/L verification passed: ${SITE_URL}"
                 exit 0
               fi
             fi
             echo "Public site not updated yet (attempt ${attempt}/30)"
             sleep 10
           done
-          echo 'Public verification failed after 5 minutes'
+          echo 'Public F/L verification failed after 5 minutes'
           exit 1
 
   full-qa:
