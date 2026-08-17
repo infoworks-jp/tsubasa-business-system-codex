@@ -3,6 +3,10 @@
   'use strict';
   const FOOD_RE=/食材|麺|餃子|イクラ|酒類|飲料/;
   const RENT_RE=/賃貸|家賃|賃料/;
+  // 北海道振興（No.3グリーンビル）の請求内訳に含まれる店舗家賃。
+  // 7月分は原票で288,000円を確認済み。7/30登録の店舗固定費も8月分請求で家賃288,000円を含む。
+  // 銀行取引では請求総額が「店舗固定費」1本になっているため、FLRのRでは家賃部分だけを対象月へ補完する。
+  const HOKKAIDO_SHINKO_RENT_BY_MONTH={'2026-07':288000,'2026-08':288000};
   const BENCHMARKS={food:'25〜35%',labor:'25〜35%',fl:'55〜65%'};
   const yen=v=>'¥'+Math.round(Number(v||0)).toLocaleString('ja-JP');
   const pct=v=>v==null?'未確定':(Number(v)*100).toFixed(1)+'%';
@@ -19,6 +23,9 @@
       const cat=String(r.category||'');
       if(FOOD_RE.test(cat)) map.get(m).food+=+r.amount||0;
       if(RENT_RE.test(cat)) map.get(m).rent+=+r.amount||0;
+    });
+    Object.entries(HOKKAIDO_SHINKO_RENT_BY_MONTH).forEach(([m,amount])=>{
+      if(map.has(m)) map.get(m).rent+=amount;
     });
     payroll.forEach(r=>{
       const x=map.get(r.year_month); if(!x)return;
@@ -105,7 +112,7 @@
       <div class="card"><div class="label">累計 F/L比率</div><div class="big">${pct(cum.flRate)}</div><div class="sub">売上 ${yen(cum.sales)} ／ 目安 ${BENCHMARKS.fl}</div></div>
       <div class="card"><div class="label">累計 FLR比率</div><div class="big">${pct(cum.flrRate)}</div><div class="sub">累計R家賃 ${yen(cum.rent)}（${pct(cum.rRate)}）</div></div>
     </div>
-    <div style="margin-top:16px"><h3>F/L・FLR 月別推移</h3><div class="sub">F＝食材・麺・餃子・イクラ・酒類・飲料　L＝給与総支給＋事業主負担社会保険　R＝賃貸家賃</div>${chart(rows)}
+    <div style="margin-top:16px"><h3>F/L・FLR 月別推移</h3><div class="sub">F＝食材・麺・餃子・イクラ・酒類・飲料　L＝給与総支給＋事業主負担社会保険　R＝エイシン家賃＋北海道振興（No.3グリーンビル）店舗家賃</div>${chart(rows)}
       <div class="legend"><span><i class="dot" style="background:#5b9bd5"></i>F率</span><span><i class="dot" style="background:#70ad47"></i>L率</span><span><i class="dot" style="background:#ed7d31"></i>F/L率</span><span><i class="dot" style="background:#7030a0"></i>FLR率</span></div>
       ${table(rows)}
       <div class="notice ${cum.labor==null?'':'ok'}" style="margin-top:10px"><b>累計</b>　売上 ${yen(cum.sales)} ／ F ${yen(cum.food)}（${pct(cum.fRate)}）／ L ${cum.labor==null?'未確定':yen(cum.labor)+'（'+pct(cum.lRate)+'）'} ／ R ${yen(cum.rent)}（${pct(cum.rRate)}）／ F/L ${pct(cum.flRate)} ／ <b>FLR ${pct(cum.flrRate)}</b></div>
@@ -121,5 +128,5 @@
     if(host){const observer=new MutationObserver(()=>{if(document.getElementById('t_overview')?.classList.contains('active')&&!document.getElementById('fl-direct-panel'))scheduleRender();});observer.observe(host,{childList:true});}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,800));else setTimeout(boot,800);
-  window.__TSUBASA_FL_DIRECT__='2026-08-17-flr-overview';
+  window.__TSUBASA_FL_DIRECT__='2026-08-17-flr-hokkaido-shinko-rent';
 })();
