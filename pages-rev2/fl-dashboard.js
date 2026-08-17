@@ -3,10 +3,9 @@
   'use strict';
   const FOOD_RE=/食材|麺|餃子|イクラ|酒類|飲料/;
   const RENT_RE=/賃貸|家賃|賃料/;
-  // 北海道振興（No.3グリーンビル）の請求内訳に含まれる店舗家賃。
-  // 7月分は原票で288,000円を確認済み。7/30登録の店舗固定費も8月分請求で家賃288,000円を含む。
-  // 銀行取引では請求総額が「店舗固定費」1本になっているため、FLRのRでは家賃部分だけを対象月へ補完する。
-  const HOKKAIDO_SHINKO_RENT_BY_MONTH={'2026-07':288000,'2026-08':288000};
+  // 北海道振興（No.3グリーンビル）の店舗家賃は月額288,000円。
+  // 6月・7月・8月のFLRでは、銀行取引上「店舗固定費」1本にまとまる請求から家賃部分を対象月へ補完する。
+  const HOKKAIDO_SHINKO_RENT_BY_MONTH={'2026-06':288000,'2026-07':288000,'2026-08':288000};
   const BENCHMARKS={food:'25〜35%',labor:'25〜35%',fl:'55〜65%'};
   const yen=v=>'¥'+Math.round(Number(v||0)).toLocaleString('ja-JP');
   const pct=v=>v==null?'未確定':(Number(v)*100).toFixed(1)+'%';
@@ -128,5 +127,5 @@
     if(host){const observer=new MutationObserver(()=>{if(document.getElementById('t_overview')?.classList.contains('active')&&!document.getElementById('fl-direct-panel'))scheduleRender();});observer.observe(host,{childList:true});}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,800));else setTimeout(boot,800);
-  window.__TSUBASA_FL_DIRECT__='2026-08-17-flr-hokkaido-shinko-rent';
+  window.__TSUBASA_FL_DIRECT__='2026-08-17-flr-hokkaido-shinko-rent-june';
 })();
