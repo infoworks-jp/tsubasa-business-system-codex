@@ -64,9 +64,6 @@
     const dailyById = new Map(daily.map((row) => [row.id, row]));
     const masterById = new Map(source.product_master.map((row) => [row.id, row]));
 
-    const monthlyProductRows = source.journal_products
-      .filter((row) => row.source_scope === "monthly_confirmed")
-      .map((row) => ({ ...row, quantity: number(row.quantity), sales_amount: number(row.sales_amount) }));
     const dailyProductRows = source.journal_products
       .filter((row) => row.daily_journal_id)
       .map((row) => ({ ...row, quantity: number(row.quantity), sales_amount: number(row.sales_amount) }));
@@ -86,7 +83,9 @@
 
     function products(scope) {
       const map = new Map();
-      for (const row of monthlyProductRows.filter((item) => inScope(item.period_month, scope))) {
+      for (const row of dailyProductRows) {
+        const journal = dailyById.get(row.daily_journal_id);
+        if (!journal || !inScope(journal.business_date, scope)) continue;
         const item = masterById.get(row.product_id) || {};
         const current = map.get(row.product_id) || {
           id: row.product_id,
@@ -189,7 +188,9 @@
           .reduce((sum, item) => sum + item.sales_amount, 0);
         const hourQuantity = hoursForDay.reduce((sum, item) => sum + (item.quantity || 0), 0);
         const hasDocument = (documentsByDate.get(row.business_date) || []).some((item) =>
-          /journal|券売機|日計/i.test(`${item.document_type || ""} ${item.file_name || ""}`)
+          /journal|券売機|日計|verified_master_source|検算済み正本|管理マスター/i.test(
+            `${item.document_type || ""} ${item.file_name || ""}`
+          )
         );
         const productComparable = row.total_sales > 0 && productsForDay.length === 40;
         const hourlyComparable = row.total_sales > 0 && hoursForDay.length === 24;

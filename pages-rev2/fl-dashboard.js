@@ -6,6 +6,8 @@
   // 北海道振興（No.3グリーンビル）の店舗家賃は月額288,000円。
   // 6月・7月・8月のFLRでは、銀行取引上「店舗固定費」1本にまとまる請求から家賃部分を対象月へ補完する。
   const HOKKAIDO_SHINKO_RENT_BY_MONTH={'2026-06':288000,'2026-07':288000,'2026-08':288000};
+  // エイシン家賃は月末に翌月分を支払うため、出金月ではなく費用発生月へ計上する。
+  const EISHIN_RENT_BY_MONTH={'2026-06':50112,'2026-07':50112,'2026-08':50112};
   const BENCHMARKS={food:'25〜35%',labor:'25〜35%',fl:'55〜65%'};
   const yen=v=>'¥'+Math.round(Number(v||0)).toLocaleString('ja-JP');
   const pct=v=>v==null?'未確定':(Number(v)*100).toFixed(1)+'%';
@@ -21,9 +23,12 @@
       const m=String(r.date||'').slice(0,7); if(!map.has(m))return;
       const cat=String(r.category||'');
       if(FOOD_RE.test(cat)) map.get(m).food+=+r.amount||0;
-      if(RENT_RE.test(cat)) map.get(m).rent+=+r.amount||0;
+      if(RENT_RE.test(cat)&&!/エイシン/.test(String(r.description||''))) map.get(m).rent+=+r.amount||0;
     });
     Object.entries(HOKKAIDO_SHINKO_RENT_BY_MONTH).forEach(([m,amount])=>{
+      if(map.has(m)) map.get(m).rent+=amount;
+    });
+    Object.entries(EISHIN_RENT_BY_MONTH).forEach(([m,amount])=>{
       if(map.has(m)) map.get(m).rent+=amount;
     });
     payroll.forEach(r=>{
@@ -127,5 +132,5 @@
     if(host){const observer=new MutationObserver(()=>{if(document.getElementById('t_overview')?.classList.contains('active')&&!document.getElementById('fl-direct-panel'))scheduleRender();});observer.observe(host,{childList:true});}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,800));else setTimeout(boot,800);
-  window.__TSUBASA_FL_DIRECT__='2026-08-17-flr-hokkaido-shinko-rent-june';
+  window.__TSUBASA_FL_DIRECT__='2026-08-24-flr-accrual-rent';
 })();

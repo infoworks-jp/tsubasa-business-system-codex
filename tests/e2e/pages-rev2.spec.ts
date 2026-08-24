@@ -9,12 +9,17 @@ const tabs = [
 ] as const;
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#updated')).toContainText('データ更新');
 });
 
-test('14タグの名称・順番とDB基準数字', async ({ page }) => {
-  await expect(page.locator('.tabs button')).toHaveText(tabs.map(([, label]) => label));
+test('主要14タグの名称・順番とDB基準数字', async ({ page }) => {
+  const expectedTabLabels = [
+    ...tabs.slice(0, -1).map(([, label]) => label),
+    '仕入数量・変動原価', '曜日×昼・夜・深夜',
+    tabs.at(-1)![1],
+  ];
+  await expect(page.locator('.tabs button[id^="t_"]')).toHaveText(expectedTabLabels);
   await expect(page.locator('#monthSelect option')).toHaveCount(3);
   await expect(page.locator('#monthSelect option')).toHaveText(['2026年6月', '2026年7月', '2026年8月']);
   await page.selectOption('#monthSelect', '2026-06');
@@ -22,9 +27,9 @@ test('14タグの名称・順番とDB基準数字', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-07');
   await expect(page.locator('#cards')).toContainText('¥4,917,050');
   await page.selectOption('#monthSelect', '2026-08');
-  await expect(page.locator('#cards')).toContainText('¥459,990');
+  await expect(page.locator('#cards')).toContainText('¥3,655,780');
   await page.locator('#scopeAll').click();
-  await expect(page.locator('#cards')).toContainText('¥10,372,290');
+  await expect(page.locator('#cards')).toContainText('¥13,568,080');
 });
 
 for (const [tab, label] of tabs) {
@@ -45,16 +50,33 @@ for (const [tab, label] of tabs) {
   }
 }
 
-test('6月商品復元と未確定データを0円扱いしない', async ({ page }) => {
+test('商品・時間帯復元と給与未確定データを0円扱いしない', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-06');
   await page.locator('#t_products').click();
   await expect(page.locator('#integrity')).toContainText('¥4,995,250 一致');
   await expect(page.locator('#host')).toContainText('全商品 40品目');
   await page.selectOption('#monthSelect', '2026-07');
   await page.locator('#t_hourly').click({ force: true });
-  await expect(page.locator('#integrity')).toContainText('5営業日分');
+  await expect(page.locator('#integrity')).toContainText('27営業日分');
   await page.locator('#t_payroll').click({ force: true });
+  await expect(page.locator('#host')).toContainText('¥314,440');
+  await expect(page.locator('#host')).toContainText('¥1,961,125');
+  await page.selectOption('#monthSelect', '2026-08');
   await expect(page.locator('#host')).toContainText('未確定');
+});
+
+test('全期間74営業日の品質検証を再発防止する', async ({ page }) => {
+  await page.locator('#scopeAll').click();
+  await page.locator('#t_quality').click();
+  await expect(page.locator('#host')).toContainText('¥13,568,080');
+  await expect(page.locator('#host')).toContainText('74/74営業日分');
+  await expect(page.locator('#host')).toContainText('総合検算');
+  await expect(page.locator('#host')).toContainText('一致');
+  const june29 = page.locator('#host tr').filter({ hasText: '2026-06-29' }).filter({ hasText: '40行' });
+  await expect(june29).toContainText('192');
+  await expect(june29).toContainText('¥174,570');
+  await expect(june29).toContainText('¥-2,700');
+  await expect(june29).toContainText('¥171,870');
 });
 
 test('公開後に判明した6月欠落を再発させない', async ({ page }) => {
@@ -99,8 +121,8 @@ test('7月通帳を取得上限で欠落させない', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-07');
   await page.locator('#t_expenses').click({ force: true });
   await expect(page.locator('#host')).toContainText('2026-07-31');
-  await expect(page.locator('#host')).toContainText('¥5,781,138');
-  await expect(page.locator('#host')).toContainText('60件');
+  await expect(page.locator('#host')).toContainText('¥5,798,188');
+  await expect(page.locator('#host')).toContainText('62件');
 });
 
 test('404 fallback', async ({ page }) => {
