@@ -37,7 +37,10 @@
     if (!cache) {
       cache = Promise.all(TABLES.map(select)).then((sets) =>
         Object.fromEntries(TABLES.map((table, index) => [table, sets[index]]))
-      );
+      ).catch((error) => {
+        cache = undefined;
+        throw error;
+      });
     }
     return cache;
   }
@@ -329,7 +332,12 @@
 
   let aggregate;
   async function data() {
-    if (!aggregate) aggregate = raw().then(build);
+    if (!aggregate) {
+      aggregate = raw().then(build).catch((error) => {
+        aggregate = undefined;
+        throw error;
+      });
+    }
     return aggregate;
   }
 
