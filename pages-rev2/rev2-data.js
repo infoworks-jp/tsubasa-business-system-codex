@@ -64,8 +64,11 @@
     const dailyById = new Map(daily.map((row) => [row.id, row]));
     const masterById = new Map(source.product_master.map((row) => [row.id, row]));
 
-    const productRows = source.journal_products
+    const monthlyProductRows = source.journal_products
       .filter((row) => row.source_scope === "monthly_confirmed")
+      .map((row) => ({ ...row, quantity: number(row.quantity), sales_amount: number(row.sales_amount) }));
+    const dailyProductRows = source.journal_products
+      .filter((row) => row.daily_journal_id)
       .map((row) => ({ ...row, quantity: number(row.quantity), sales_amount: number(row.sales_amount) }));
     const hourRows = source.journal_hours.map((row) => ({
       ...row,
@@ -83,7 +86,7 @@
 
     function products(scope) {
       const map = new Map();
-      for (const row of productRows.filter((item) => inScope(item.period_month, scope))) {
+      for (const row of monthlyProductRows.filter((item) => inScope(item.period_month, scope))) {
         const item = masterById.get(row.product_id) || {};
         const current = map.get(row.product_id) || {
           id: row.product_id,
@@ -135,7 +138,8 @@
           customers,
           days: operating.length,
           avg_daily: operating.length ? sales / operating.length : null,
-          avg_spend: customers ? sales / customers : null
+          avg_spend: customers ? sales / customers : null,
+          status: quality(month).status
         };
       });
     }
@@ -168,56 +172,82 @@
 
     function quality(scope) {
       const rows = scopedDaily(scope);
-      const productList = products(scope);
-      const hourList = hourly(scope);
       const dailyTotal = rows.reduce((sum, row) => sum + row.total_sales, 0);
-      const productTotal = productList.reduce((sum, row) => sum + row.sales, 0);
-      const hourTotal = hourList.reduce((sum, row) => sum + row.sales, 0);
-      const productMonths = new Set(productRows.map((row) => monthOf(row.period_month)));
-      const hourDays = new Set(hourRows.map((row) => row.daily_journal_id));
-      const scopedHourDays = new Set(rows.filter((row) => hourDays.has(row.id)).map((row) => row.id));
-      const hasDailyProducts = productRows.some((row) => row.daily_journal_id);
-      const scopeMonths = scope === "all" ? months : [scope];
-      const productComplete = scopeMonths.every((month) => productMonths.has(month));
+      const operatingRows = rows.filter((row) => row.total_sales > 0);
+      const documentsByDate = new Map();
+      for (const document of source.documents.filter((item) => item.business_date)) {
+        const current = documentsByDate.get(document.business_date) || [];
+        current.push(document);
+        documentsByDate.set(document.business_date, current);
+      }
       const details = rows.map((row) => {
-        const product = productRows.filter((item) => item.daily_journal_id === row.id)
+        const productsForDay = dailyProductRows.filter((item) => item.daily_journal_id === row.id);
+        const product = productsForDay
           .reduce((sum, item) => sum + item.sales_amount, 0);
-        const hour = hourRows.filter((item) => item.daily_journal_id === row.id)
+        const hoursForDay = hourRows.filter((item) => item.daily_journal_id === row.id);
+        const hour = hoursForDay
           .reduce((sum, item) => sum + item.sales_amount, 0);
+        const hourQuantity = hoursForDay.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const hasDocument = (documentsByDate.get(row.business_date) || []).some((item) =>
+          /journal|券売機|日計/i.test(`${item.document_type || ""} ${item.file_name || ""}`)
+        );
+        const productComparable = row.total_sales > 0 && productsForDay.length === 40;
+        const hourlyComparable = row.total_sales > 0 && hoursForDay.length === 24;
         return {
           date: row.business_date,
           daily: row.total_sales,
-          products: productComplete && hasDailyProducts ? product : null,
-          product_diff: productComplete && hasDailyProducts ? row.total_sales - product : null,
-          product_match: productComplete && hasDailyProducts && row.total_sales === product,
-          hourly_gross: hourDays.has(row.id) ? hour : null,
+          products: productComparable ? product : null,
+          product_diff: productComparable ? row.total_sales - product : null,
+          product_match: productComparable && row.total_sales === product,
+          product_rows: productsForDay.length,
+          hourly_gross: hourlyComparable ? hour : null,
           settlement_adjustment: row.settlement_amount,
-          hourly_net: hourDays.has(row.id) ? hour + (row.settlement_amount || 0) : null,
-          hourly_match: hourDays.has(row.id) && hour + (row.settlement_amount || 0) === row.total_sales
+          hourly_net: hourlyComparable ? hour + (row.settlement_amount || 0) : null,
+          hourly_rows: hoursForDay.length,
+          hourly_quantity: hourlyComparable ? hourQuantity : null,
+          hourly_match: hourlyComparable
+            && hourQuantity === row.issued_count
+            && hour + (row.settlement_amount || 0) === row.total_sales,
+          document_match: row.total_sales > 0 && hasDocument
         };
       });
-      const operatingRows = rows.filter((row) => row.total_sales > 0);
-      const hourlyComparable = operatingRows.length > 0 && operatingRows.every((row) => hourDays.has(row.id));
-      const hourlyDetailsMatch = details.filter((row) => row.daily > 0).every((row) => row.hourly_match);
-      const scopedSettlementAdjustment = rows
-        .filter((row) => hourDays.has(row.id))
-        .reduce((sum, row) => sum + (row.settlement_amount || 0), 0);
+      const operatingDetails = details.filter((row) => row.daily > 0);
+      const productComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.product_match);
+      const hourlyComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.hourly_match);
+      const documentComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.document_match);
+      const productTotal = productComplete
+        ? operatingDetails.reduce((sum, row) => sum + row.products, 0)
+        : null;
+      const scopedHourDays = operatingDetails.filter((row) => row.hourly_rows === 24).length;
+      const completeHourlyDetails = operatingDetails.filter((row) => row.hourly_rows === 24);
+      const hourTotal = completeHourlyDetails.reduce((sum, row) => sum + row.hourly_gross, 0);
+      const scopedSettlementAdjustment = completeHourlyDetails
+        .reduce((sum, row) => sum + (row.settlement_adjustment || 0), 0);
       const pending = rows.filter((row) => row.total_sales === 0 && !/休/.test(row.notes || "")).length;
+      const missingProductDates = operatingDetails.filter((row) => !row.product_match).map((row) => row.date);
+      const missingHourlyDates = operatingDetails.filter((row) => !row.hourly_match).map((row) => row.date);
+      const missingDocumentDates = operatingDetails.filter((row) => !row.document_match).map((row) => row.date);
+      const matched = productComplete && hourlyComplete && documentComplete && pending === 0;
       return {
         daily: dailyTotal,
-        products: productComplete ? productTotal : null,
-        hourly: hourList.length ? hourTotal : null,
-        settlement_adjustment: hourList.length ? scopedSettlementAdjustment : null,
-        hourly_net: hourList.length ? hourTotal + scopedSettlementAdjustment : null,
-        product_match: productComplete && dailyTotal === productTotal,
-        hourly_match: hourlyComparable && hourlyDetailsMatch,
-        matched: productComplete && dailyTotal === productTotal && hourlyComparable && hourlyDetailsMatch && pending === 0,
+        products: productTotal,
+        hourly: scopedHourDays ? hourTotal : null,
+        settlement_adjustment: scopedHourDays ? scopedSettlementAdjustment : null,
+        hourly_net: scopedHourDays ? hourTotal + scopedSettlementAdjustment : null,
+        product_match: productComplete,
+        hourly_match: hourlyComplete,
+        document_match: documentComplete,
+        matched,
+        status: matched ? "確定" : "要確認",
         holidays: rows.filter((row) => row.total_sales === 0 && /休/.test(row.notes || "")).length,
         pending,
-        missing_product_dates: productComplete ? [] : ["商品別原本未登録"],
+        missing_product_dates: missingProductDates,
+        missing_hourly_dates: missingHourlyDates,
+        missing_document_dates: missingDocumentDates,
         source_scope: {
-          product: productComplete ? "月全体" : "原本未登録",
-          hourly: scopedHourDays.size ? `${scopedHourDays.size}営業日分` : "原本未登録"
+          product: productComplete ? `${operatingRows.length}営業日分` : `${operatingRows.length - missingProductDates.length}/${operatingRows.length}営業日分`,
+          hourly: scopedHourDays ? `${scopedHourDays}/${operatingRows.length}営業日分` : "原本未登録",
+          document: documentComplete ? `${operatingRows.length}営業日分` : `${operatingRows.length - missingDocumentDates.length}/${operatingRows.length}営業日分`
         },
         details
       };
