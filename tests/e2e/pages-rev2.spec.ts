@@ -79,6 +79,21 @@ test('全期間74営業日の品質検証を再発防止する', async ({ page }
   await expect(june29).toContainText('¥171,870');
 });
 
+test('全登録月を欠損のまま確定表示しない', async ({ page }) => {
+  const months = await page.locator('#monthSelect option').evaluateAll(options =>
+    options.map(option => (option as HTMLOptionElement).value),
+  );
+  for (const month of months) {
+    await page.selectOption('#monthSelect', month);
+    await page.locator('#t_quality').click();
+    await expect(page.locator('#integrity .notice')).toHaveClass(/ok/);
+    await expect(page.locator('#integrity')).toContainText('売上検算 一致');
+    await expect(page.locator('#host .notice.ok').first()).toContainText('検算一致');
+    await expect(page.locator('#host')).toContainText('総合検算');
+    await expect(page.locator('#host')).toContainText('一致');
+  }
+});
+
 test('公開後に判明した6月欠落を再発させない', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-06');
 
