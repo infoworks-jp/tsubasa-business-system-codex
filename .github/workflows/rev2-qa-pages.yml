@@ -37,12 +37,20 @@ jobs:
           index = root / 'index.html'
           holiday = root / 'holiday-enhancements.js'
           fl = root / 'fl-dashboard.js'
-          if not index.exists() or not holiday.exists() or not fl.exists():
+          fresh = root / 'fresh-supabase.js'
+          if not index.exists() or not holiday.exists() or not fl.exists() or not fresh.exists():
               raise SystemExit('Required Pages files are missing')
 
           html = index.read_text(encoding='utf-8')
           html = re.sub(r'<script src="\./holiday-enhancements\.js\?v=[^"]+"></script>', '', html)
           html = re.sub(r'<script src="\./fl-dashboard\.js\?v=[^"]+"></script>', '', html)
+          html = re.sub(r'<script src="\./fresh-supabase\.js\?v=[^"]+"></script>', '', html)
+          html = re.sub(
+              r'(<script src="\./rev2-data\.js\?v=[^"]+"></script>)',
+              '<script src="./fresh-supabase.js?v=${{ github.sha }}"></script>\\n\\1',
+              html,
+              count=1
+          )
           scripts = '\n'.join([
               '<script src="./holiday-enhancements.js?v=${{ github.sha }}"></script>',
               '<script src="./fl-dashboard.js?v=${{ github.sha }}"></script>'
@@ -58,11 +66,17 @@ jobs:
           for required in ('F/L・FLR 経営指標', '__TSUBASA_FL_DIRECT__', '累計 F/L比率', '累計 FLR比率', 'FLR率'):
               if required not in fl_js:
                   raise SystemExit(f'F/L・FLR dashboard is incomplete: {required}')
+          fresh_js = fresh.read_text(encoding='utf-8')
+          for required in ('cache: "no-store"', 'order", "id.asc"', '__TSUBASA_FRESH_SUPABASE__'):
+              if required not in fresh_js:
+                  raise SystemExit(f'Fresh Supabase patch is incomplete: {required}')
           PY
       - name: Static smoke check
         run: |
           node --check pages-rev2/holiday-enhancements.js
           node --check pages-rev2/fl-dashboard.js
+          node --check pages-rev2/fresh-supabase.js
+          grep -q 'fresh-supabase.js' pages-rev2/index.html
           grep -q 'holiday-enhancements.js' pages-rev2/index.html
           grep -q 'fl-dashboard.js' pages-rev2/index.html
           grep -q 'F/L・FLR 経営指標' pages-rev2/fl-dashboard.js
@@ -101,10 +115,11 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 30); do
             html="$(curl -fsSL --max-time 20 "${SITE_URL}?verify=${GITHUB_SHA}" || true)"
-            if printf '%s' "$html" | grep -q 'holiday-enhancements.js' && printf '%s' "$html" | grep -q 'fl-dashboard.js'; then
+            if printf '%s' "$html" | grep -q 'fresh-supabase.js' && printf '%s' "$html" | grep -q 'holiday-enhancements.js' && printf '%s' "$html" | grep -q 'fl-dashboard.js'; then
+              fresh_js="$(curl -fsSL --max-time 20 "${SITE_URL}fresh-supabase.js?verify=${GITHUB_SHA}" || true)"
               holiday_js="$(curl -fsSL --max-time 20 "${SITE_URL}holiday-enhancements.js?verify=${GITHUB_SHA}" || true)"
               fl_js="$(curl -fsSL --max-time 20 "${SITE_URL}fl-dashboard.js?verify=${GITHUB_SHA}" || true)"
-              if printf '%s' "$holiday_js" | grep -q '山の日' && printf '%s' "$fl_js" | grep -q 'F/L・FLR 経営指標' && printf '%s' "$fl_js" | grep -q '累計 FLR比率' && printf '%s' "$fl_js" | grep -q '__TSUBASA_FL_DIRECT__'; then
+              if printf '%s' "$fresh_js" | grep -q '__TSUBASA_FRESH_SUPABASE__' && printf '%s' "$holiday_js" | grep -q '山の日' && printf '%s' "$fl_js" | grep -q 'F/L・FLR 経営指標' && printf '%s' "$fl_js" | grep -q '累計 FLR比率' && printf '%s' "$fl_js" | grep -q '__TSUBASA_FL_DIRECT__'; then
                 echo "Public F/L・FLR verification passed: ${SITE_URL}"
                 exit 0
               fi
