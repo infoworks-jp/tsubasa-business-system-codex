@@ -1,0 +1,12 @@
+{
+  "name": "味一番つばさ シフト",
+  "short_name": "つばさシフト",
+  "description": "味一番つばさの簡易シフト管理アプリ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#15395b",
+  "orientation": "any",
+  "icons": [{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
