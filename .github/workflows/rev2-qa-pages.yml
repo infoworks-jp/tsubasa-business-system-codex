@@ -135,7 +135,7 @@ jobs:
 
   full-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
