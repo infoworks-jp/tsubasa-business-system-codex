@@ -1,6 +1,18 @@
-# 味一番つばさ 売上管理・経営分析システム（Codex版）
+# 味一番つばさ 売上管理・経営分析システム「つばさ3」
 
-札幌すすきののラーメン店「味一番つばさ」向けシステムの、Codex版Phase 0設計文書です。
+## 現在の本番正本
+
+- 公開Web版: https://infoworks-jp.github.io/tsubasa-business-system-codex/
+- 公開コード: `pages-rev2/`
+- データ正本: Supabase project `spyopczqtxypqjbhylzf` の `rev2` スキーマ
+- 公開基盤: GitHub Pages
+- ChatGPT Pro依存: なし
+
+公開画面の接続設定は `pages-rev2/site-config.js` に集約しています。変更場所は [MAINTENANCE.md](MAINTENANCE.md) を参照してください。
+
+以下のNext.js App Router部分は別系統の開発資産です。公開中の `pages-rev2/` と取り違えないでください。
+
+札幌すすきののラーメン店「味一番つばさ」向けシステムの開発・設計資産です。
 
 ## 現在の状態
 

@@ -38,8 +38,9 @@ jobs:
           holiday = root / 'holiday-enhancements.js'
           fl = root / 'fl-dashboard.js'
           fresh = root / 'fresh-supabase.js'
-          if not index.exists() or not holiday.exists() or not fl.exists() or not fresh.exists():
-              raise SystemExit('Required Pages files are missing')
+          config = root / 'site-config.js'
+          if not index.exists() or not holiday.exists() or not fl.exists() or not fresh.exists() or not config.exists():
+            raise SystemExit('Required Pages files are missing')
 
           html = index.read_text(encoding='utf-8')
           html = re.sub(r'<script src="\./holiday-enhancements\.js\?v=[^"]+"></script>', '', html)
@@ -76,6 +77,8 @@ jobs:
           node --check pages-rev2/holiday-enhancements.js
           node --check pages-rev2/fl-dashboard.js
           node --check pages-rev2/fresh-supabase.js
+          node --check pages-rev2/site-config.js
+          grep -q 'site-config.js' pages-rev2/index.html
           grep -q 'fresh-supabase.js' pages-rev2/index.html
           grep -q 'holiday-enhancements.js' pages-rev2/index.html
           grep -q 'fl-dashboard.js' pages-rev2/index.html

@@ -1,0 +1,20 @@
+{
+  "name": "つばさ3",
+  "repository": "infoworks-jp/tsubasa-business-system-codex",
+  "branch": "main",
+  "publicUrl": "https://infoworks-jp.github.io/tsubasa-business-system-codex/",
+  "runtime": "GitHub Pages + Supabase",
+  "chatgptProRequired": false,
+  "entry": "pages-rev2/index.html",
+  "runtimeConfig": "pages-rev2/site-config.js",
+  "sourceOfTruth": {
+    "service": "Supabase",
+    "project": "spyopczqtxypqjbhylzf",
+    "schema": "rev2"
+  },
+  "legacyNotSourceOfTruth": [
+    "infoworks-jp/tubasa-cell.github.io",
+    "既存Excel",
+    "Next.js開発画面"
+  ]
+}

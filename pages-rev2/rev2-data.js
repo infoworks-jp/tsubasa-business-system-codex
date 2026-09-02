@@ -1,8 +1,10 @@
 (function () {
   "use strict";
 
-  const SUPABASE_URL = "https://spyopczqtxypqjbhylzf.supabase.co";
-  const PUBLISHABLE_KEY = "sb_publishable_0OHZyJkYkTjqJoIUGUAKNw_R1ZvEzUg";
+  const config = window.TSUBASA_CONFIG;
+  if (!config) throw new Error("site-config.js が読み込まれていません");
+  const SUPABASE_URL = config.supabaseUrl;
+  const PUBLISHABLE_KEY = config.publishableKey;
   const TABLES = [
     "daily_journal", "journal_products", "journal_hours", "monthly_summary",
     "bank_transactions", "expenses", "payroll", "documents", "product_master"
@@ -21,7 +23,7 @@
         headers: {
           apikey: PUBLISHABLE_KEY,
           Authorization: `Bearer ${PUBLISHABLE_KEY}`,
-          "Accept-Profile": "rev2",
+          "Accept-Profile": config.schema,
           "Range-Unit": "items",
           Range: `${start}-${start + pageSize - 1}`
         }
