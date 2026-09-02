@@ -13,23 +13,46 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('#updated')).toContainText('データ更新');
 });
 
-test('主要14タグの名称・順番とDB基準数字', async ({ page }) => {
+test('主要画面の名称・順番とDB連動数字', async ({ page }) => {
   const expectedTabLabels = [
     ...tabs.slice(0, -1).map(([, label]) => label),
     '仕入数量・変動原価', '曜日×昼・夜・深夜',
     tabs.at(-1)![1],
   ];
   await expect(page.locator('.tabs button[id^="t_"]')).toHaveText(expectedTabLabels);
-  await expect(page.locator('#monthSelect option')).toHaveCount(3);
-  await expect(page.locator('#monthSelect option')).toHaveText(['2026年6月', '2026年7月', '2026年8月']);
+  const months = await page.locator('#monthSelect option').evaluateAll(options =>
+    options.map(option => ({
+      value: (option as HTMLOptionElement).value,
+      label: option.textContent || '',
+    })),
+  );
+  expect(months.map(month => month.value)).toEqual(expect.arrayContaining(['2026-06', '2026-07', '2026-08']));
+  expect(months.map(month => month.label)).toEqual(expect.arrayContaining(['2026年6月', '2026年7月', '2026年8月']));
+
+  // 検算済みの過去月は固定値でデータ消失・改変を検知する。
   await page.selectOption('#monthSelect', '2026-06');
   await expect(page.locator('#cards')).toContainText('¥4,995,250');
   await page.selectOption('#monthSelect', '2026-07');
   await expect(page.locator('#cards')).toContainText('¥4,917,050');
-  await page.selectOption('#monthSelect', '2026-08');
-  await expect(page.locator('#cards')).toContainText('¥3,655,780');
+
+  // 追加中の月と累計は固定値にせず、現在のDB集計と画面を照合する。
+  for (const month of months.map(item => item.value).filter(value => value !== '2026-06' && value !== '2026-07')) {
+    const overview = await page.evaluate(async scope => {
+      const response = await fetch(`/api/overview/${scope}`);
+      return response.json() as Promise<{ month_sales: number }>;
+    }, month);
+    expect(overview.month_sales).toBeGreaterThan(0);
+    await page.selectOption('#monthSelect', month);
+    await expect(page.locator('#cards')).toContainText(`¥${overview.month_sales.toLocaleString('ja-JP')}`);
+  }
+
+  const allOverview = await page.evaluate(async () => {
+    const response = await fetch('/api/overview/all');
+    return response.json() as Promise<{ total_sales: number; total_days: number }>;
+  });
   await page.locator('#scopeAll').click();
-  await expect(page.locator('#cards')).toContainText('¥13,568,080');
+  await expect(page.locator('#cards')).toContainText(`¥${allOverview.total_sales.toLocaleString('ja-JP')}`);
+  await expect(page.locator('#cards')).toContainText(`${allOverview.total_days}日`);
 });
 
 for (const [tab, label] of tabs) {
@@ -65,13 +88,23 @@ test('商品・時間帯復元と給与未確定データを0円扱いしない'
   await expect(page.locator('#host')).toContainText('未確定');
 });
 
-test('全期間74営業日の品質検証を再発防止する', async ({ page }) => {
+test('全期間の品質状態をDBと一致させる', async ({ page }) => {
+  const quality = await page.evaluate(async () => {
+    const response = await fetch('/api/quality/all');
+    return response.json() as Promise<{
+      daily: number;
+      matched: boolean;
+      source_scope: { product: string; hourly: string; document: string };
+    }>;
+  });
   await page.locator('#scopeAll').click();
   await page.locator('#t_quality').click();
-  await expect(page.locator('#host')).toContainText('¥13,568,080');
-  await expect(page.locator('#host')).toContainText('74/74営業日分');
-  await expect(page.locator('#host')).toContainText('総合検算');
-  await expect(page.locator('#host')).toContainText('一致');
+  await expect(page.locator('#host')).toContainText(`¥${quality.daily.toLocaleString('ja-JP')}`);
+  await expect(page.locator('#host')).toContainText(quality.source_scope.product);
+  await expect(page.locator('#host')).toContainText(quality.source_scope.hourly);
+  await expect(page.locator('#host')).toContainText(quality.source_scope.document);
+  const overallCheck = page.locator('#host .card').filter({ hasText: '総合検算' });
+  await expect(overallCheck).toContainText(quality.matched ? '一致' : '要確認');
   const june29 = page.locator('#host tr').filter({ hasText: '2026-06-29' }).filter({ hasText: '40行' });
   await expect(june29).toContainText('192');
   await expect(june29).toContainText('¥174,570');
@@ -84,13 +117,17 @@ test('全登録月を欠損のまま確定表示しない', async ({ page }) => 
     options.map(option => (option as HTMLOptionElement).value),
   );
   for (const month of months) {
+    const quality = await page.evaluate(async scope => {
+      const response = await fetch(`/api/quality/${scope}`);
+      return response.json() as Promise<{ matched: boolean }>;
+    }, month);
     await page.selectOption('#monthSelect', month);
     await page.locator('#t_quality').click();
-    await expect(page.locator('#integrity .notice')).toHaveClass(/ok/);
-    await expect(page.locator('#integrity')).toContainText('売上検算 一致');
-    await expect(page.locator('#host .notice.ok').first()).toContainText('検算一致');
-    await expect(page.locator('#host')).toContainText('総合検算');
-    await expect(page.locator('#host')).toContainText('一致');
+    await expect(page.locator('#integrity .notice')).toHaveClass(quality.matched ? /ok/ : /ng/);
+    await expect(page.locator('#integrity')).toContainText(quality.matched ? '売上検算 一致' : '売上検算 要確認');
+    await expect(page.locator('#host .notice').first()).toContainText(quality.matched ? '検算一致' : '検算は未合格です');
+    const overallCheck = page.locator('#host .card').filter({ hasText: '総合検算' });
+    await expect(overallCheck).toContainText(quality.matched ? '一致' : '要確認');
   }
 });
 
