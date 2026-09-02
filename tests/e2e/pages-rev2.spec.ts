@@ -122,6 +122,8 @@ test('全登録月を欠損のまま確定表示しない', async ({ page }) => 
       return response.json() as Promise<{ matched: boolean }>;
     }, month);
     await page.selectOption('#monthSelect', month);
+    const [year, monthNumber] = month.split('-');
+    await expect(page.locator('#integrity')).toContainText(`${year}年${Number(monthNumber)}月`);
     await page.locator('#t_quality').click();
     await expect(page.locator('#integrity .notice')).toHaveClass(quality.matched ? /ok/ : /ng/);
     await expect(page.locator('#integrity')).toContainText(quality.matched ? '売上検算 一致' : '売上検算 要確認');
