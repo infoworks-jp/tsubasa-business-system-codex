@@ -38,8 +38,9 @@ test('主要画面の名称・順番とDB連動数字', async ({ page }) => {
   // 追加中の月と累計は固定値にせず、現在のDB集計と画面を照合する。
   for (const month of months.map(item => item.value).filter(value => value !== '2026-06' && value !== '2026-07')) {
     const overview = await page.evaluate(async scope => {
-      const response = await fetch(`/api/overview/${scope}`);
-      return response.json() as Promise<{ month_sales: number }>;
+      return (window as typeof window & {
+        rev2Api: (url: string) => Promise<{ month_sales: number }>;
+      }).rev2Api(`/api/overview/${scope}`);
     }, month);
     expect(overview.month_sales).toBeGreaterThan(0);
     await page.selectOption('#monthSelect', month);
@@ -47,8 +48,9 @@ test('主要画面の名称・順番とDB連動数字', async ({ page }) => {
   }
 
   const allOverview = await page.evaluate(async () => {
-    const response = await fetch('/api/overview/all');
-    return response.json() as Promise<{ total_sales: number; total_days: number }>;
+    return (window as typeof window & {
+      rev2Api: (url: string) => Promise<{ total_sales: number; total_days: number }>;
+    }).rev2Api('/api/overview/all');
   });
   await page.locator('#scopeAll').click();
   await expect(page.locator('#cards')).toContainText(`¥${allOverview.total_sales.toLocaleString('ja-JP')}`);
@@ -90,8 +92,13 @@ test('商品・時間帯復元と給与未確定データを0円扱いしない'
 
 test('全期間の品質状態をDBと一致させる', async ({ page }) => {
   const quality = await page.evaluate(async () => {
-    const response = await fetch('/api/quality/all');
-    return response.json() as Promise<{
+    return (window as typeof window & {
+      rev2Api: (url: string) => Promise<{
+        daily: number;
+        matched: boolean;
+        source_scope: { product: string; hourly: string; document: string };
+      }>;
+    }).rev2Api('/api/quality/all') as Promise<{
       daily: number;
       matched: boolean;
       source_scope: { product: string; hourly: string; document: string };
@@ -118,8 +125,9 @@ test('全登録月を欠損のまま確定表示しない', async ({ page }) => 
   );
   for (const month of months) {
     const quality = await page.evaluate(async scope => {
-      const response = await fetch(`/api/quality/${scope}`);
-      return response.json() as Promise<{ matched: boolean }>;
+      return (window as typeof window & {
+        rev2Api: (url: string) => Promise<{ matched: boolean }>;
+      }).rev2Api(`/api/quality/${scope}`);
     }, month);
     await page.selectOption('#monthSelect', month);
     const [year, monthNumber] = month.split('-');
