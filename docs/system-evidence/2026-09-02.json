@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-09-02T13:57:06Z",
+  "overall": "PASS",
+  "purpose": "Durable evidence that the public systems run without ChatGPT Pro and that required external services are reachable or correctly configured.",
+  "repositories": [
+    {
+      "system": "rio-corporate-site",
+      "repository": "infoworks-jp/rio-corporate-site",
+      "auditedHeadSha": "1879f9ed3690cadd30ff2e1b96fe8bc16e9b7f39",
+      "runtime": "GitHub Pages",
+      "chatgptProRequired": false,
+      "publicUrl": "https://infoworks-jp.github.io/rio-corporate-site/",
+      "publicHttpStatus": 200,
+      "deploymentChecks": "success"
+    },
+    {
+      "system": "tubasa-susukino-site",
+      "repository": "infoworks-jp/tubasa-susukino-site",
+      "auditedHeadSha": "4e57b602c8fe462481c77fa23b5c07535b2f8da9",
+      "runtime": "GitHub Pages",
+      "chatgptProRequired": false,
+      "publicUrl": "https://www.tubasa-susukino.com/",
+      "publicHttpStatus": 200,
+      "finalManagerVerdict": "success"
+    },
+    {
+      "system": "tsubasa3",
+      "repository": "infoworks-jp/tsubasa-business-system-codex",
+      "qaFixSha": "e476559f431e51eadc921ca38fac8c1c40846240",
+      "runtime": "GitHub Pages + Supabase",
+      "chatgptProRequired": false,
+      "publicUrl": "https://infoworks-jp.github.io/tsubasa-business-system-codex/",
+      "publicHttpStatus": 200,
+      "deploymentChecks": "success"
+    }
+  ],
+  "externalServices": [
+    {
+      "service": "Supabase",
+      "role": "tsubasa3 source of truth",
+      "projectId": "spyopczqtxypqjbhylzf",
+      "projectStatus": "ACTIVE_HEALTHY",
+      "schema": "rev2",
+      "schemaExists": true,
+      "baseTableCount": 9,
+      "databaseCheckAtUtc": "2026-09-02T13:47:46.446299Z",
+      "publicRestCheck": {
+        "table": "monthly_summary",
+        "httpStatus": 200,
+        "returnedJsonArray": true
+      },
+      "chatgptProRequired": false,
+      "status": "PASS"
+    },
+    {
+      "service": "Supabase Edge Function + database",
+      "role": "rio recruitment application form",
+      "projectId": "xxhgerxugsjoxkbuuqhb",
+      "projectStatus": "ACTIVE_HEALTHY",
+      "function": "rio-contact",
+      "functionVersion": 9,
+      "functionStatus": "ACTIVE",
+      "healthHttpStatus": 200,
+      "healthResponse": {
+        "ok": true,
+        "service": "rio-contact"
+      },
+      "submissionsTableExists": true,
+      "rateLimitsTableExists": true,
+      "databaseCheckAtUtc": "2026-09-02T13:47:44.933093Z",
+      "chatgptProRequired": false,
+      "status": "PASS"
+    },
+    {
+      "service": "Indeed",
+      "role": "rio recruitment links",
+      "sapporoJobKey": "91ce7644bf2afaab",
+      "yokohamaJobKey": "6342d3c5e932ba44",
+      "linksPresentInSource": true,
+      "publicPagesFoundByWebIndexDate": "2026-09-02",
+      "automatedRuntimeCheck": "configuration-only because Indeed can block bots",
+      "chatgptProRequired": false,
+      "status": "PASS_WITH_SCOPE"
+    },
+    {
+      "service": "Google Maps",
+      "role": "tsubasa access map",
+      "standardSearchLinkPresent": true,
+      "googleCloudApiKeyRequired": false,
+      "chatgptProRequired": false,
+      "status": "PASS"
+    }
+  ],
+  "qualityAssurance": {
+    "tsubasa3": {
+      "workflowRunId": 33638311575,
+      "fullQaJobId": 100274687812,
+      "fullQaUrl": "https://github.com/infoworks-jp/tsubasa-business-system-codex/actions/runs/33638311575/job/100274687812",
+      "result": "success",
+      "passed": 98,
+      "failed": 0,
+      "duration": "4.3m",
+      "completedAtUtc": "2026-09-02T13:57:06Z",
+      "artifactId": 9849943663
+    }
+  },
+  "automatedCrossSystemAudit": {
+    "workflowRunId": 33638528539,
+    "jobId": 100275409774,
+    "url": "https://github.com/infoworks-jp/tsubasa-business-system-codex/actions/runs/33638528539/job/100275409774",
+    "generatedAtUtc": "2026-09-02T13:53:53.264Z",
+    "result": "success",
+    "checksPassed": 10,
+    "checksFailed": 0,
+    "artifactId": 9849808672,
+    "artifactSha256": "69782e4a8100135ff5dc15a253edb483f016cb8a525ae0942ffaa14d9bd88df1"
+  },
+  "limitations": [
+    "Recruitment email delivery was not tested because doing so would send a real external message. The health check verifies the Edge Function and database only.",
+    "Indeed live access is not used as a blocking automated check because its anti-bot layer may reject automation; the configured links and indexed job pages were verified.",
+    "Availability checks do not prove the semantic correctness of every business-data row. Tsubasa3 data-quality logic and UI behavior are covered separately by the 98-test Playwright run."
+  ],
+  "officialServiceNotes": {
+    "supabaseFreePlan": "Free projects may pause after one week of low activity; the rio contact health workflow performs a daily database-backed check.",
+    "supabasePausingDocs": "https://supabase.com/docs/guides/platform/free-project-pausing",
+    "supabasePricing": "https://supabase.com/pricing"
+  }
+}
