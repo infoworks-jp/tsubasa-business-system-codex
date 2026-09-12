@@ -97,8 +97,8 @@ async function renderExpenses(){
  const scoped=state.scope==='all'?rows:rows.filter(r=>String(r.date).slice(0,7)===state.month);
  const total=scoped.reduce((sum,row)=>sum+row.amount,0);
  const groups=new Map();scoped.forEach(row=>groups.set(row.category,(groups.get(row.category)||0)+row.amount));
- const external=scoped.filter(r=>/仕入|外注/.test(r.category)).reduce((sum,row)=>sum+row.amount,0);
- const body=scoped.length?`<div class="cards"><div class="card"><div>仕入・外注支払</div><div class="big">${yen(external)}</div><div class="sub">通帳の確定分類</div></div><div class="card"><div>主要出金合計</div><div class="big">${yen(total)}</div><div class="sub">${scoped.length}件</div></div></div><div class="panel" style="margin-top:12px"><h3>主要出金カテゴリ</h3>${table(['区分','金額'],[...groups].map(([name,amount])=>[name,yen(amount)]),true)}</div><div class="panel" style="margin-top:12px"><h3>日付別・確認済み支出一覧</h3>${table(['日付','摘要','分類','金額','状態'],scoped.map(r=>[r.date,escapeHtml(r.description),r.category,yen(r.amount),r.status]),true)}</div>`:'<div class="notice"><b>この期間の支出原本は未登録です。</b> 0円として扱いません。</div>';
+ const externalRows=scoped.filter(r=>/仕入|外注/.test(r.category)),external=externalRows.reduce((sum,row)=>sum+row.amount,0);
+ const body=scoped.length?`<div class="cards"><div class="card"><div>仕入・外注支払</div><div class="big">${externalRows.length?yen(external):'該当分類なし'}</div><div class="sub">通帳の登録済み確定分類</div></div><div class="card"><div>主要出金合計</div><div class="big">${yen(total)}</div><div class="sub">${scoped.length}件</div></div></div><div class="panel" style="margin-top:12px"><h3>主要出金カテゴリ</h3>${table(['区分','金額'],[...groups].map(([name,amount])=>[name,yen(amount)]),true)}</div><div class="panel" style="margin-top:12px"><h3>日付別・確認済み支出一覧</h3>${table(['日付','摘要','分類','金額','状態'],scoped.map(r=>[r.date,escapeHtml(r.description),r.category,yen(r.amount),r.status]),true)}</div>`:'<div class="notice"><b>この期間の支出原本は未登録です。</b> 0円として扱いません。</div>';
  $('host').innerHTML=`<div class="notice ok" style="margin-bottom:12px"><b>${scopeLabel()}の仕入・外注・経費</b>　正規データはbank_transactionsの確定分類です。expensesとの二重計上はしません。</div>${body}`;
 }
 async function renderConsulting(){
