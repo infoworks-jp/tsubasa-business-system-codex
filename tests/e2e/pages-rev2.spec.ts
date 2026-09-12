@@ -145,7 +145,7 @@ test('公開後に判明した6月欠落を再発させない', async ({ page })
   await page.selectOption('#monthSelect', '2026-06');
 
   await page.locator('#t_hourly').click();
-  await expect(page.locator('#host')).toContainText('2026年6月 時間帯別 売上');
+  await expect(page.locator('#host')).toContainText('2026年6月 時間帯別 発行額');
   await expect(page.locator('#integrity')).toContainText('28営業日分');
   await expect(page.locator('#host')).toContainText('¥5,025,340');
 
@@ -185,6 +185,45 @@ test('7月通帳を取得上限で欠落させない', async ({ page }) => {
   await expect(page.locator('#host')).toContainText('2026-07-31');
   await expect(page.locator('#host')).toContainText('¥5,798,188');
   await expect(page.locator('#host')).toContainText('62件');
+});
+
+test('欠損を0表示せず通常グラフを停止する', async ({ page }) => {
+  await page.selectOption('#monthSelect', '2026-09');
+  await page.locator('#t_beer').click();
+  await expect(page.locator('#host')).toContainText('未登録・分析不可');
+  await expect(page.locator('#host')).not.toContainText('ビール売上 ¥0');
+  await expect(page.locator('#host svg')).toHaveCount(0);
+
+  await page.selectOption('#monthSelect', '2026-08');
+  await page.locator('#t_products').click();
+  await expect(page.locator('#host')).toContainText('26営業日中23日分のみ・分析不可');
+  await expect(page.locator('#host svg')).toHaveCount(0);
+
+  await page.selectOption('#monthSelect', '2026-09');
+  await page.locator('#t_hourly').click();
+  await expect(page.locator('#host')).toContainText('9営業日中7日分のみ・要確認');
+  await expect(page.locator('#host')).toContainText('発行ベース');
+  await expect(page.locator('#host svg')).toHaveCount(0);
+});
+
+test('長期原票客数と2系列を混同しない', async ({ page }) => {
+  const historical = await page.evaluate(async () => (window as typeof window & {
+    rev2Api: (url: string) => Promise<Array<{ month: string; customers: number }>>;
+  }).rev2Api('/api/historical-monthly'));
+  expect(historical.find(row => row.month === '2026-08')?.customers).toBe(4002);
+  await page.locator('#t_executive').click();
+  await expect(page.locator('#host')).toContainText('長期原票系列と券売機確定系列は別物です');
+  await expect(page.locator('#host')).toContainText('4,002人');
+  await expect(page.locator('#host')).toContainText('3,640人');
+});
+
+test('スマホ相当でも主要導線と欠損表示が読める', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.selectOption('#monthSelect', '2026-09');
+  await page.locator('#t_products').click();
+  await expect(page.locator('#host')).toContainText('未登録・分析不可');
+  await expect(page.locator('body')).toBeVisible();
 });
 
 test('404 fallback', async ({ page }) => {

@@ -7,7 +7,8 @@
   const PUBLISHABLE_KEY = config.publishableKey;
   const TABLES = [
     "daily_journal", "journal_products", "journal_hours", "monthly_summary",
-    "bank_transactions", "expenses", "payroll", "documents", "product_master"
+    "bank_transactions", "expenses", "payroll", "documents", "product_master",
+    "historical_monthly_performance", "monthly_operating_costs"
   ];
   let cache;
 
@@ -208,18 +209,22 @@
           product_rows: productsForDay.length,
           hourly_gross: hourlyComparable ? hour : null,
           settlement_adjustment: row.settlement_amount,
-          hourly_net: hourlyComparable ? hour + (row.settlement_amount || 0) : null,
+          hourly_net: null,
+          hourly_difference: hourlyComparable ? hour - row.total_sales : null,
+          hourly_large_difference: hourlyComparable
+            ? Math.abs(hour - row.total_sales) >= Math.max(5000, row.total_sales * 0.05)
+            : false,
           hourly_rows: hoursForDay.length,
           hourly_quantity: hourlyComparable ? hourQuantity : null,
-          hourly_match: hourlyComparable
-            && hourQuantity === row.issued_count
-            && hour + (row.settlement_amount || 0) === row.total_sales,
+          hourly_match: hourlyComparable && hoursForDay.length === 24,
           document_match: row.total_sales > 0 && hasDocument
         };
       });
       const operatingDetails = details.filter((row) => row.daily > 0);
       const productComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.product_match);
       const hourlyComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.hourly_match);
+      const hourlyAnomalyDates = operatingDetails.filter((row) => row.hourly_large_difference).map((row) => row.date);
+      const hourlySafe = hourlyComplete && hourlyAnomalyDates.length === 0;
       const documentComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.document_match);
       const productTotal = productComplete
         ? operatingDetails.reduce((sum, row) => sum + row.products, 0)
@@ -230,10 +235,21 @@
       const scopedSettlementAdjustment = completeHourlyDetails
         .reduce((sum, row) => sum + (row.settlement_adjustment || 0), 0);
       const pending = rows.filter((row) => row.total_sales === 0 && !/休/.test(row.notes || "")).length;
-      const missingProductDates = operatingDetails.filter((row) => !row.product_match).map((row) => row.date);
-      const missingHourlyDates = operatingDetails.filter((row) => !row.hourly_match).map((row) => row.date);
+      const absentProductDates = operatingDetails.filter((row) => row.product_rows === 0).map((row) => row.date);
+      const productMismatchDates = operatingDetails.filter((row) => row.product_rows > 0 && !row.product_match).map((row) => row.date);
+      const missingProductDates = absentProductDates.concat(productMismatchDates);
+      const absentHourlyDates = operatingDetails.filter((row) => row.hourly_rows === 0).map((row) => row.date);
+      const hourlyMismatchDates = operatingDetails.filter((row) => row.hourly_rows > 0 && !row.hourly_match).map((row) => row.date);
+      const missingHourlyDates = absentHourlyDates.concat(hourlyMismatchDates);
       const missingDocumentDates = operatingDetails.filter((row) => !row.document_match).map((row) => row.date);
-      const matched = productComplete && hourlyComplete && documentComplete && pending === 0;
+      const matched = productComplete && hourlySafe && documentComplete && pending === 0;
+      const productRegisteredDays = operatingDetails.filter((row) => row.product_rows > 0).length;
+      const hourlyRegisteredDays = operatingDetails.filter((row) => row.hourly_rows > 0).length;
+      const statusFor = (registered, expected, complete) => {
+        if (registered === 0) return "unregistered";
+        if (complete && registered === expected) return "complete";
+        return "partial";
+      };
       return {
         daily: dailyTotal,
         products: productTotal,
@@ -249,10 +265,22 @@
         pending,
         missing_product_dates: missingProductDates,
         missing_hourly_dates: missingHourlyDates,
+        hourly_anomaly_dates: hourlyAnomalyDates,
+        absent_product_dates: absentProductDates,
+        product_mismatch_dates: productMismatchDates,
+        absent_hourly_dates: absentHourlyDates,
+        hourly_mismatch_dates: hourlyMismatchDates,
         missing_document_dates: missingDocumentDates,
+        coverage: {
+          operating_days: operatingDetails.length,
+          product_days: productRegisteredDays,
+          hourly_days: hourlyRegisteredDays,
+          product_status: statusFor(productRegisteredDays, operatingDetails.length, productComplete),
+          hourly_status: statusFor(hourlyRegisteredDays, operatingDetails.length, hourlySafe)
+        },
         source_scope: {
-          product: productComplete ? `${operatingRows.length}営業日分` : `${operatingRows.length - missingProductDates.length}/${operatingRows.length}営業日分`,
-          hourly: scopedHourDays ? `${scopedHourDays}/${operatingRows.length}営業日分` : "原本未登録",
+          product: productRegisteredDays === 0 ? "未登録" : (productComplete ? `${operatingRows.length}営業日分` : `${productRegisteredDays}/${operatingRows.length}営業日分`),
+          hourly: hourlyRegisteredDays === 0 ? "原本未登録" : `${hourlyRegisteredDays}/${operatingRows.length}営業日分`,
           document: documentComplete ? `${operatingRows.length}営業日分` : `${operatingRows.length - missingDocumentDates.length}/${operatingRows.length}営業日分`
         },
         details
@@ -349,6 +377,31 @@
       return { months: value.months, active_month: value.months.at(-1), overview: value.overview(value.months.at(-1)) };
     }
     if (url === "/api/monthly") return clone(value.monthly());
+    if (url === "/api/historical-monthly") {
+      return clone(value.source.historical_monthly_performance
+        .map((row) => ({
+          month: monthOf(row.month_start),
+          sales: number(row.sales_total),
+          customers: number(row.customer_count),
+          avg_spend: number(row.average_spend),
+          source_page: number(row.source_page),
+          source_file: row.source_file,
+          verification_status: row.verification_status,
+          series: "長期原票系列"
+        }))
+        .sort((a, b) => a.month.localeCompare(b.month)));
+    }
+    if (url === "/api/operating-costs") {
+      return clone(value.source.monthly_operating_costs.map((row) => ({
+        month: monthOf(row.month_start),
+        type: row.cost_type,
+        vendor: row.vendor,
+        amount: number(row.amount),
+        status: row.verification_status,
+        source: row.source_reference,
+        notes: row.notes
+      })));
+    }
     if (url === "/api/expenses") {
       return clone(value.source.bank_transactions.filter((row) => number(row.withdrawal_amount) > 0).map((row) => ({
         date: row.transaction_date,

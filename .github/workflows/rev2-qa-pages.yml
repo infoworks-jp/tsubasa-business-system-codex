@@ -68,7 +68,7 @@ jobs:
               if required not in fl_js:
                   raise SystemExit(f'F/L・FLR dashboard is incomplete: {required}')
           fresh_js = fresh.read_text(encoding='utf-8')
-          for required in ('cache: "no-store"', 'order", "id.asc"', '__TSUBASA_FRESH_SUPABASE__'):
+          for required in ('cache: "no-store"', 'TABLE_ORDER', '__TSUBASA_FRESH_SUPABASE__'):
               if required not in fresh_js:
                   raise SystemExit(f'Fresh Supabase patch is incomplete: {required}')
           PY
