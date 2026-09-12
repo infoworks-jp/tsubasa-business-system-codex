@@ -34,7 +34,7 @@ async function api(url,opt){
  if(opt)throw new Error('公開Web版は閲覧専用です');
  return window.rev2Api(url);
 }
-async function init(){for(let attempt=0;attempt<3;attempt++){try{const b=await api('/api/bootstrap');state.monthly=await api('/api/monthly');$('monthSelect').innerHTML=b.months.map(m=>`<option value="${m}">${ymLabel(m)}</option>`).join('');state.month=b.active_month;$('monthSelect').value=state.month;await reloadCurrent();return}catch(error){if(attempt===2){$('updated').textContent='データ取得エラー（再読込してください）';console.error(error);return}await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))}}}
+async function init(){for(let attempt=0;attempt<3;attempt++){try{const b=await api('/api/bootstrap');state.monthly=await api('/api/monthly');$('monthSelect').innerHTML=b.months.map(m=>`<option value="${m}">${ymLabel(m)}</option>`).join('');state.month=b.active_month;$('monthSelect').value=state.month;await reloadCurrent();if(document.getElementById('t_executive'))await window.showTab('executive');return}catch(error){if(attempt===2){$('updated').textContent='データ取得エラー（再読込してください）';console.error(error);return}await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))}}}
 function currentScope(){return state.scope==='all'?'all':state.month}
 function scopeLabel(){return state.scope==='all'?'累計（全期間）':ymLabel(state.month)}
 function monthChanged(){state.month=$('monthSelect').value;if(state.scope!=='month')setScope('month');else reloadCurrent()}
