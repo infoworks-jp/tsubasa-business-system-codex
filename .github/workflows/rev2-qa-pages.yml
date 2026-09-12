@@ -47,6 +47,11 @@ jobs:
           html = re.sub(r'<script src="\./fl-dashboard\.js\?v=[^"]+"></script>', '', html)
           html = re.sub(r'<script src="\./fresh-supabase\.js\?v=[^"]+"></script>', '', html)
           html = re.sub(
+              r'(<script src="\./(?:site-config|rev2-data)\.js)\?v=[^"]+',
+              r'\1?v=${{ github.sha }}',
+              html,
+          )
+          html = re.sub(
               r'(<script src="\./rev2-data\.js\?v=[^"]+"></script>)',
               '<script src="./fresh-supabase.js?v=${{ github.sha }}"></script>\\n\\1',
               html,
