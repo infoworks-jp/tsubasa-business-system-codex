@@ -31,7 +31,7 @@
       const [ov,q,hourly,products,daily]=await Promise.all([api('/api/overview/'+active),api('/api/quality/'+active),api('/api/hourly/'+active),api('/api/products/'+active),api('/api/daily/'+active)]);
       const hm=histMonthly(histRows.map(x=>({month_start:x.month,sales_total:x.sales,customer_count:x.customers,average_spend:x.avg_spend,source_page:x.source_page}))),ticket=Object.fromEntries(ticketRows.map(x=>[x.month,x])),m=active.slice(5),years=['2023','2024','2025','2026'],same=years.map(y=>({year:y,...(hm[y+'-'+m]||{})}));
       const recentSummer=['06','07','08'].map(mm=>({month:mm,original:hm['2026-'+mm],ticket:ticket['2026-'+mm],prior:hm['2025-'+mm]}));
-      const hr=(hourly&&hourly.rows)||[],byHour={};hr.forEach(x=>{const h=Number(x.hour_start),z=byHour[h]||(byHour[h]={s:0});z.s+=Number(x.sales_amount||x.gross_sales||0)});const topHours=Object.entries(byHour).sort((a,b)=>b[1].s-a[1].s).slice(0,3).map(x=>x[0]+'時').join('・')||'未集計';
+      const hr=(hourly&&hourly.rows)||[],byHour={};hr.forEach(x=>{const h=Number.parseInt(String(x.hour??x.hour_start),10);if(!Number.isFinite(h))return;const z=byHour[h]||(byHour[h]={s:0});z.s+=Number(x.sales??x.sales_amount??x.gross_sales??0)});const topHours=Object.entries(byHour).sort((a,b)=>b[1].s-a[1].s).slice(0,3).map(x=>x[0]+'時').join('・')||'未集計';
       const pcount=Array.isArray(products)?products.length:0,dailyCount=(daily||[]).filter(x=>Number(x.total_sales||0)>0).length,coverage=q.coverage||{};
       const dataIssues=['長期原票には月別の客数が記載されています。客単価も「売上÷客数」で算出できます。月次比較へ反映しました。'];
       if(coverage.product_status!=='complete')dataIssues.push(active+'の商品別明細は '+(coverage.product_status==='unregistered'?'未登録':`${coverage.product_days}/${coverage.operating_days}営業日分`)+'です。商品グラフやビールを0円とは扱いません。');
