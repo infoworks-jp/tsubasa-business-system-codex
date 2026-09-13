@@ -190,7 +190,11 @@ test('7月通帳を取得上限で欠落させない', async ({ page }) => {
 test('欠損を0表示せず通常グラフを停止する', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-09');
   await page.locator('#t_beer').click();
-  await expect(page.locator('#host')).toContainText('未登録・分析不可');
+  await expect(page.locator('#host')).toContainText('9営業日中4日分の原票を登録済み');
+  await expect(page.locator('#host')).toContainText('生ビール');
+  await expect(page.locator('#host')).toContainText('¥33,600');
+  await expect(page.locator('#host')).toContainText('瓶ビール');
+  await expect(page.locator('#host')).toContainText('¥39,200');
   await expect(page.locator('#host')).not.toContainText('ビール売上 ¥0');
   await expect(page.locator('#host svg')).toHaveCount(0);
 
@@ -201,9 +205,9 @@ test('欠損を0表示せず通常グラフを停止する', async ({ page }) =>
 
   await page.selectOption('#monthSelect', '2026-09');
   await page.locator('#t_hourly').click();
-  await expect(page.locator('#host')).toContainText('9営業日中7日分のみ・要確認');
+  await expect(page.locator('#host')).toContainText('全営業日分登録済み');
   await expect(page.locator('#host')).toContainText('発行ベース');
-  await expect(page.locator('#host svg')).toHaveCount(0);
+  await expect(page.locator('#host svg')).not.toHaveCount(0);
 });
 
 test('長期原票客数と2系列を混同しない', async ({ page }) => {
@@ -222,7 +226,7 @@ test('スマホ相当でも主要導線と欠損表示が読める', async ({ pa
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.selectOption('#monthSelect', '2026-09');
   await page.locator('#t_products').click();
-  await expect(page.locator('#host')).toContainText('未登録・分析不可');
+  await expect(page.locator('#host')).toContainText('9営業日中4日分の原票を登録済み');
   await expect(page.locator('body')).toBeVisible();
 });
 
