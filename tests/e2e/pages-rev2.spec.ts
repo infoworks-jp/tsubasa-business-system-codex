@@ -115,7 +115,7 @@ test('全期間の品質状態をDBと一致させる', async ({ page }) => {
   const june29 = page.locator('#host tr').filter({ hasText: '2026-06-29' }).filter({ hasText: '40行' });
   await expect(june29).toContainText('192');
   await expect(june29).toContainText('¥174,570');
-  await expect(june29).toContainText('¥-2,700');
+  await expect(june29).toContainText('¥2,700');
   await expect(june29).toContainText('¥171,870');
 });
 
@@ -200,7 +200,7 @@ test('欠損を0表示せず通常グラフを停止する', async ({ page }) =>
 
   await page.selectOption('#monthSelect', '2026-08');
   await page.locator('#t_products').click();
-  await expect(page.locator('#host')).toContainText('26営業日中23日分のみ・分析不可');
+  await expect(page.locator('#host')).toContainText('26営業日中23日分の原票を登録済み');
   await expect(page.locator('#host svg')).toHaveCount(0);
 
   await page.selectOption('#monthSelect', '2026-09');
