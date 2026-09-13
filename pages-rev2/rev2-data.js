@@ -276,7 +276,7 @@
           product_days: productRegisteredDays,
           hourly_days: hourlyRegisteredDays,
           product_status: statusFor(productRegisteredDays, operatingDetails.length, productComplete),
-          hourly_status: statusFor(hourlyRegisteredDays, operatingDetails.length, hourlySafe)
+          hourly_status: statusFor(hourlyRegisteredDays, operatingDetails.length, hourlyComplete)
         },
         source_scope: {
           product: productRegisteredDays === 0 ? "未登録" : (productComplete ? `${operatingRows.length}営業日分` : `${productRegisteredDays}/${operatingRows.length}営業日分`),
