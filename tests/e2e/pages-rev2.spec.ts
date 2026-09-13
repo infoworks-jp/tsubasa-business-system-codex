@@ -205,6 +205,10 @@ test('9月商品原票を全日検算し通常分析を表示する', async ({ p
   await expect(page.locator('#host')).toContainText('累積構成比');
   await expect(page.locator('#host')).not.toContainText('分析不可');
 
+  await page.locator('#t_executive').click();
+  await expect(page.locator('#host')).toContainText('9月の商品分析を使い');
+  await expect(page.locator('#host')).not.toContainText('9月の商品別データを確認して');
+
   await page.selectOption('#monthSelect', '2026-08');
   await page.locator('#t_products').click();
   await expect(page.locator('#host')).toContainText('26営業日中23日分の原票を登録済み');
