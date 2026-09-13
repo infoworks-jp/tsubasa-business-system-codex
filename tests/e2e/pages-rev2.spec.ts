@@ -188,22 +188,22 @@ test('7月通帳を取得上限で欠落させない', async ({ page }) => {
   await expect(page.locator('#host')).toContainText('62件');
 });
 
-test('欠損を0表示せず通常グラフを停止する', async ({ page }) => {
+test('9月商品原票を全日検算し通常分析を表示する', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-09');
   await page.locator('#t_beer').click();
-  await expect(page.locator('#host')).toContainText('9営業日中4日分の原票を登録済み');
-  await expect(page.locator('#host')).toContainText('月の日計売上');
-  await expect(page.locator('#host')).toContainText('¥2,219,810');
-  await expect(page.locator('#host')).toContainText('商品内訳登録済み');
-  await expect(page.locator('#host')).toContainText('¥993,160');
-  await expect(page.locator('#host')).toContainText('商品内訳未取得売上');
-  await expect(page.locator('#host')).toContainText('¥1,226,650');
+  await expect(page.locator('#host')).toContainText('商品別原票は全営業日分そろっています');
+  await expect(page.locator('#host')).toContainText('ビール売上');
+  await expect(page.locator('#host')).toContainText('¥144,800');
+  await expect(page.locator('#host')).toContainText('219本');
   await expect(page.locator('#host')).toContainText('生ビール');
-  await expect(page.locator('#host')).toContainText('¥33,600');
+  await expect(page.locator('#host')).toContainText('¥51,000');
   await expect(page.locator('#host')).toContainText('瓶ビール');
-  await expect(page.locator('#host')).toContainText('¥39,200');
+  await expect(page.locator('#host')).toContainText('¥93,800');
   await expect(page.locator('#host')).not.toContainText('ビール売上 ¥0');
-  await expect(page.locator('#host svg')).toHaveCount(0);
+
+  await page.locator('#t_abc').click();
+  await expect(page.locator('#host')).toContainText('累積構成比');
+  await expect(page.locator('#host')).not.toContainText('分析不可');
 
   await page.selectOption('#monthSelect', '2026-08');
   await page.locator('#t_products').click();
@@ -233,7 +233,8 @@ test('スマホ相当でも主要導線と欠損表示が読める', async ({ pa
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.selectOption('#monthSelect', '2026-09');
   await page.locator('#t_products').click();
-  await expect(page.locator('#host')).toContainText('9営業日中4日分の原票を登録済み');
+  await expect(page.locator('#host')).toContainText('全商品 40品目');
+  await expect(page.locator('#host')).not.toContainText('分析不可');
   await expect(page.locator('body')).toBeVisible();
 });
 

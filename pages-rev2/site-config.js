@@ -36,7 +36,7 @@
       const dataIssues=['長期原票には月別の客数が記載されています。客単価も「売上÷客数」で算出できます。月次比較へ反映しました。'];
       if(coverage.product_status!=='complete')dataIssues.push(active+'の商品別明細は '+(coverage.product_status==='unregistered'?'未登録':`${coverage.product_days}/${coverage.operating_days}営業日分`)+'です。日計売上は '+yen(q.daily)+'、うち商品内訳未取得は '+yen(q.product_breakdown_pending_total)+' です。商品グラフやビールを0円とは扱いません。');
       if(coverage.hourly_status!=='complete')dataIssues.push('時間帯別は '+(coverage.hourly_days||0)+'日分、日計は '+(coverage.operating_days||dailyCount)+'営業日分。時間帯は発行ベースの一部データです。');
-      if(q.source_scope?.retained_original)dataIssues.push('原本恒久保存は '+q.source_scope.retained_original+'。保存先ID・SHA-256・容量がそろった写真だけを「原本あり」と判定します。9月2〜6日は過去の取込時に写真識別子が保存されなかったため、再取得対象です。');
+      if(q.source_scope?.retained_original)dataIssues.push('原本恒久保存は '+q.source_scope.retained_original+'。保存先ID・SHA-256・容量がそろった写真だけを「原本あり」と判定します。'+(q.missing_retained_source_dates?.length?'未保存日：'+q.missing_retained_source_dates.join('、')+'。':'対象日の原本を追跡可能です。'));
       if(!q.matched)dataIssues.push('「要確認」の主因は、商品別・時間帯別など内訳データの不足です。日計売上が欠損・ゼロという意味ではありません。');
       dataIssues.push('シフトは端末内保存（localStorage）のため、別端末とはまだ自動共有されません。');
       const sameHtml=same.map(x=>`<tr><td>${x.year}年${Number(m)}月</td><td>${x.sales==null?'データなし':yen(x.sales)}</td><td>${x.customers==null?'—':Number(x.customers).toLocaleString()+'人'}</td><td>${x.avg==null?'—':yen(x.avg)}</td></tr>`).join('');
