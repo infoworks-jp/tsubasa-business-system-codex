@@ -96,12 +96,12 @@ test('全期間の品質状態をDBと一致させる', async ({ page }) => {
       rev2Api: (url: string) => Promise<{
         daily: number;
         matched: boolean;
-        source_scope: { product: string; hourly: string; document: string };
+        source_scope: { product: string; hourly: string; document: string; retained_original: string };
       }>;
     }).rev2Api('/api/quality/all') as Promise<{
       daily: number;
       matched: boolean;
-      source_scope: { product: string; hourly: string; document: string };
+      source_scope: { product: string; hourly: string; document: string; retained_original: string };
     }>;
   });
   await page.locator('#scopeAll').click();
@@ -110,6 +110,7 @@ test('全期間の品質状態をDBと一致させる', async ({ page }) => {
   await expect(page.locator('#host')).toContainText(quality.source_scope.product);
   await expect(page.locator('#host')).toContainText(quality.source_scope.hourly);
   await expect(page.locator('#host')).toContainText(quality.source_scope.document);
+  await expect(page.locator('#host')).toContainText(quality.source_scope.retained_original);
   const overallCheck = page.locator('#host .card').filter({ hasText: '総合検算' });
   await expect(overallCheck).toContainText(quality.matched ? '一致' : '要確認');
   const june29 = page.locator('#host tr').filter({ hasText: '2026-06-29' }).filter({ hasText: '40行' });

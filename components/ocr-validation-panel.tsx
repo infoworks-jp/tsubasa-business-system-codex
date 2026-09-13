@@ -260,20 +260,26 @@ export function OcrValidationPanel() {
 
   async function saveImport() {
     if (saving || importRows.length === 0) return;
+    if (!imageFile) {
+      setSaveMessage("原本画像が選択されていません。数字だけでは保存できません。");
+      return;
+    }
     setSaving(true);
     setSaveMessage(null);
 
     try {
+      const formData = new FormData();
+      formData.append("sourceFile", imageFile, imageFile.name);
+      formData.append("payload", JSON.stringify({
+        imageName,
+        engineId,
+        ocrState,
+        businessDate,
+        rows: importRows,
+      }));
       const response = await fetch("/api/ocr/imports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageName,
-          engineId,
-          ocrState,
-          businessDate,
-          rows: importRows,
-        }),
+        body: formData,
       });
 
       const result = (await response.json()) as {

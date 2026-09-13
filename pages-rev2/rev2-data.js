@@ -193,10 +193,17 @@
         const hour = hoursForDay
           .reduce((sum, item) => sum + item.sales_amount, 0);
         const hourQuantity = hoursForDay.reduce((sum, item) => sum + (item.quantity || 0), 0);
-        const hasDocument = (documentsByDate.get(row.business_date) || []).some((item) =>
+        const documentsForDay = documentsByDate.get(row.business_date) || [];
+        const hasDocument = documentsForDay.some((item) =>
           /journal|券売機|日計|verified_master_source|検算済み正本|管理マスター/i.test(
             `${item.document_type || ""} ${item.file_name || ""}`
           )
+        );
+        const hasRetainedDocument = documentsForDay.some((item) =>
+          item.retention_status === "preserved" &&
+          /^[0-9a-f]{64}$/.test(String(item.sha256 || "")) &&
+          Number(item.byte_size) > 0 &&
+          Boolean(item.archive_uri || item.library_file_id)
         );
         const productComparable = row.total_sales > 0 && productsForDay.length === 40;
         const hourlyComparable = row.total_sales > 0 && hoursForDay.length === 24;
@@ -217,7 +224,8 @@
           hourly_rows: hoursForDay.length,
           hourly_quantity: hourlyComparable ? hourQuantity : null,
           hourly_match: hourlyComparable && hoursForDay.length === 24,
-          document_match: row.total_sales > 0 && hasDocument
+          document_match: row.total_sales > 0 && hasDocument,
+          retained_document_match: row.total_sales > 0 && hasRetainedDocument
         };
       });
       const operatingDetails = details.filter((row) => row.daily > 0);
@@ -226,6 +234,7 @@
       const hourlyAnomalyDates = operatingDetails.filter((row) => row.hourly_large_difference).map((row) => row.date);
       const hourlySafe = hourlyComplete && hourlyAnomalyDates.length === 0;
       const documentComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.document_match);
+      const retentionComplete = operatingDetails.length > 0 && operatingDetails.every((row) => row.retained_document_match);
       const productTotal = productComplete
         ? operatingDetails.reduce((sum, row) => sum + row.products, 0)
         : null;
@@ -242,7 +251,8 @@
       const hourlyMismatchDates = operatingDetails.filter((row) => row.hourly_rows > 0 && !row.hourly_match).map((row) => row.date);
       const missingHourlyDates = absentHourlyDates.concat(hourlyMismatchDates);
       const missingDocumentDates = operatingDetails.filter((row) => !row.document_match).map((row) => row.date);
-      const matched = productComplete && hourlySafe && documentComplete && pending === 0;
+      const missingRetainedSourceDates = operatingDetails.filter((row) => !row.retained_document_match).map((row) => row.date);
+      const matched = productComplete && hourlySafe && documentComplete && retentionComplete && pending === 0;
       const productRegisteredDays = operatingDetails.filter((row) => row.product_rows > 0).length;
       const registeredProductTotal = operatingDetails
         .filter((row) => row.product_rows > 0 && row.products !== null)
@@ -265,6 +275,7 @@
         product_match: productComplete,
         hourly_match: hourlyComplete,
         document_match: documentComplete,
+        retained_document_match: retentionComplete,
         matched,
         status: matched ? "確定" : "要確認",
         holidays: rows.filter((row) => row.total_sales === 0 && /休/.test(row.notes || "")).length,
@@ -277,6 +288,7 @@
         absent_hourly_dates: absentHourlyDates,
         hourly_mismatch_dates: hourlyMismatchDates,
         missing_document_dates: missingDocumentDates,
+        missing_retained_source_dates: missingRetainedSourceDates,
         coverage: {
           operating_days: operatingDetails.length,
           product_days: productRegisteredDays,
@@ -287,7 +299,8 @@
         source_scope: {
           product: productRegisteredDays === 0 ? "未登録" : (productComplete ? `${operatingRows.length}営業日分` : `${productRegisteredDays}/${operatingRows.length}営業日分`),
           hourly: hourlyRegisteredDays === 0 ? "原本未登録" : `${hourlyRegisteredDays}/${operatingRows.length}営業日分`,
-          document: documentComplete ? `${operatingRows.length}営業日分` : `${operatingRows.length - missingDocumentDates.length}/${operatingRows.length}営業日分`
+          document: documentComplete ? `${operatingRows.length}営業日分` : `${operatingRows.length - missingDocumentDates.length}/${operatingRows.length}営業日分`,
+          retained_original: `${operatingRows.length - missingRetainedSourceDates.length}/${operatingRows.length}営業日分`
         },
         details
       };

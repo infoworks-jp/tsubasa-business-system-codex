@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import type {
   OcrImportDraftRow,
   OcrExecutionState,
@@ -20,6 +21,34 @@ type SavePayload = {
   businessDate?: unknown;
   rows?: unknown;
 };
+
+const SOURCE_BUCKET = "tsubasa-source-originals";
+const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+const ALLOWED_SOURCE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+
+function safeExtension(fileName: string) {
+  const match = fileName.toLowerCase().match(/\.([a-z0-9]{1,8})$/);
+  return match?.[1] ?? "bin";
+}
+
+async function parseMultipartRequest(request: NextRequest) {
+  if (!request.headers.get("content-type")?.includes("multipart/form-data")) {
+    throw new Error("原本未保存: 画像本体を含むmultipart形式で送信してください");
+  }
+  const form = await request.formData();
+  const sourceFile = form.get("sourceFile");
+  const payloadText = form.get("payload");
+  if (!(sourceFile instanceof File) || typeof payloadText !== "string") {
+    throw new Error("原本未保存: 画像本体と取込内容が必要です");
+  }
+  if (sourceFile.size <= 0 || sourceFile.size > MAX_SOURCE_BYTES) {
+    throw new Error("原本画像は1バイト以上20MB以下にしてください");
+  }
+  if (!ALLOWED_SOURCE_TYPES.has(sourceFile.type)) {
+    throw new Error("原本はJPEG・PNG・WebP・PDFのみ保存できます");
+  }
+  return { body: JSON.parse(payloadText) as SavePayload, sourceFile };
+}
 
 type ImportHeaderRow = {
   id: string;
@@ -177,7 +206,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as SavePayload;
+    if (!process.env.SUPABASE_ADMIN_JWT) {
+      throw new Error("原本保存用のサーバー認証が未設定です。数字は保存していません");
+    }
+    const { body, sourceFile } = await parseMultipartRequest(request);
     const rows = parseRows(body.rows);
 
     if (rows.length === 0) {
@@ -190,7 +222,11 @@ export async function POST(request: NextRequest) {
     const imageName = String(body.imageName ?? "uploaded-image");
     const engineId = String(body.engineId ?? "unknown");
     const ocrState = String(body.ocrState ?? "not-run") as OcrExecutionState;
-  const businessDate = parseBusinessDate(body.businessDate);
+    const businessDate = parseBusinessDate(body.businessDate);
+
+    const sourceBytes = Buffer.from(await sourceFile.arrayBuffer());
+    const sourceSha256 = createHash("sha256").update(sourceBytes).digest("hex");
+    const storagePath = `${businessDate}/${sourceSha256}.${safeExtension(sourceFile.name)}`;
 
     const products = await getProductRepository().list({ active: "all" });
     const matchedRows: OcrImportSavedRow[] = rows.map((row, index) => {
@@ -235,6 +271,37 @@ export async function POST(request: NextRequest) {
 
     const client = getSupabaseServerClient();
 
+    const { error: sourceUploadError } = await client.storage
+      .from(SOURCE_BUCKET)
+      .upload(storagePath, sourceBytes, {
+        contentType: sourceFile.type,
+        upsert: true,
+      });
+    if (sourceUploadError) {
+      throw new Error(`原本保存に失敗したため数字は保存していません: ${sourceUploadError.message}`);
+    }
+
+    const sourceKey = `ocr-source:${businessDate}:${sourceSha256}`;
+    const { data: sourceDocument, error: sourceDocumentError } = await client
+      .schema("rev2")
+      .from("documents")
+      .upsert({
+        source_key: sourceKey,
+        document_type: "journal_source_original",
+        file_name: sourceFile.name || imageName,
+        business_date: businessDate,
+        verification_status: "source_registered",
+        archive_uri: `storage://${SOURCE_BUCKET}/${storagePath}`,
+        sha256: sourceSha256,
+        byte_size: sourceFile.size,
+        retention_status: "preserved",
+      }, { onConflict: "source_key" })
+      .select("id")
+      .single();
+    if (sourceDocumentError || !sourceDocument) {
+      throw new Error(`原本台帳の登録に失敗したため数字は保存していません: ${sourceDocumentError?.message ?? "unknown"}`);
+    }
+
     const { data: importData, error: importError } = await client
       .from("ticket_ocr_imports")
       .insert({
@@ -249,6 +316,8 @@ export async function POST(request: NextRequest) {
         total_count: record.summary.total,
         processed_count: record.summary.processed,
         needs_review_count: record.summary.needsReview,
+        source_document_id: sourceDocument.id,
+        source_sha256: sourceSha256,
       })
       .select("id, created_at, queue_status, business_date, confirmed_at, saved_at, error_message")
       .single();
@@ -292,7 +361,7 @@ export async function POST(request: NextRequest) {
     record.rows = persistedRows;
 
     return NextResponse.json({
-      message: "OCR取込データを保存しました",
+      message: "原本を恒久保存し、OCR取込データを保存しました",
       record,
     });
   } catch (error) {
