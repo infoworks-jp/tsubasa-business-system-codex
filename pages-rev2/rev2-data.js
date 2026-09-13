@@ -244,6 +244,10 @@
       const missingDocumentDates = operatingDetails.filter((row) => !row.document_match).map((row) => row.date);
       const matched = productComplete && hourlySafe && documentComplete && pending === 0;
       const productRegisteredDays = operatingDetails.filter((row) => row.product_rows > 0).length;
+      const registeredProductTotal = operatingDetails
+        .filter((row) => row.product_rows > 0 && row.products !== null)
+        .reduce((sum, row) => sum + row.products, 0);
+      const productBreakdownPendingTotal = Math.max(0, dailyTotal - registeredProductTotal);
       const hourlyRegisteredDays = operatingDetails.filter((row) => row.hourly_rows > 0).length;
       const statusFor = (registered, expected, complete) => {
         if (registered === 0) return "unregistered";
@@ -253,6 +257,8 @@
       return {
         daily: dailyTotal,
         products: productTotal,
+        registered_product_total: productRegisteredDays ? registeredProductTotal : null,
+        product_breakdown_pending_total: productBreakdownPendingTotal,
         hourly: scopedHourDays ? hourTotal : null,
         settlement_adjustment: scopedHourDays ? scopedSettlementAdjustment : null,
         hourly_net: scopedHourDays ? hourTotal + scopedSettlementAdjustment : null,

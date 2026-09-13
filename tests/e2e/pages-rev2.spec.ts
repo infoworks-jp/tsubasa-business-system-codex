@@ -191,6 +191,12 @@ test('欠損を0表示せず通常グラフを停止する', async ({ page }) =>
   await page.selectOption('#monthSelect', '2026-09');
   await page.locator('#t_beer').click();
   await expect(page.locator('#host')).toContainText('9営業日中4日分の原票を登録済み');
+  await expect(page.locator('#host')).toContainText('月の日計売上');
+  await expect(page.locator('#host')).toContainText('¥2,219,810');
+  await expect(page.locator('#host')).toContainText('商品内訳登録済み');
+  await expect(page.locator('#host')).toContainText('¥993,160');
+  await expect(page.locator('#host')).toContainText('商品内訳未取得売上');
+  await expect(page.locator('#host')).toContainText('¥1,226,650');
   await expect(page.locator('#host')).toContainText('生ビール');
   await expect(page.locator('#host')).toContainText('¥33,600');
   await expect(page.locator('#host')).toContainText('瓶ビール');
