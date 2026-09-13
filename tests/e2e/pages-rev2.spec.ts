@@ -219,6 +219,12 @@ test('9月商品原票を全日検算し通常分析を表示する', async ({ p
   await expect(page.locator('#host')).toContainText('全営業日分登録済み');
   await expect(page.locator('#host')).toContainText('発行ベース');
   await expect(page.locator('#host svg')).not.toHaveCount(0);
+
+  await page.locator('#t_quality').click();
+  await expect(page.locator('#host')).toContainText('検算一致');
+  const september4 = page.locator('#host tr').filter({ hasText: '2026-09-04' }).filter({ hasText: '¥259,410' });
+  await expect(september4).toContainText('¥1,600');
+  await expect(september4).toContainText('参考差異');
 });
 
 test('長期原票客数と2系列を混同しない', async ({ page }) => {

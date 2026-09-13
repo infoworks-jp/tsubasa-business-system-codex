@@ -271,7 +271,7 @@
         product_breakdown_pending_total: productBreakdownPendingTotal,
         hourly: scopedHourDays ? hourTotal : null,
         settlement_adjustment: scopedHourDays ? scopedSettlementAdjustment : null,
-        hourly_net: scopedHourDays ? hourTotal + scopedSettlementAdjustment : null,
+        hourly_net: scopedHourDays ? hourTotal - scopedSettlementAdjustment : null,
         product_match: productComplete,
         hourly_match: hourlyComplete,
         document_match: documentComplete,
