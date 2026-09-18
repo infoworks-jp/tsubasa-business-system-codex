@@ -1,17 +1,3 @@
-create table if not exists rev2.shift_workspaces (
-  workspace_key text primary key,
-  access_hash text not null,
-  payload jsonb not null default '{}'::jsonb,
-  revision bigint not null default 1,
-  updated_at timestamptz not null default now(),
-  constraint shift_workspace_key_format check (workspace_key ~ '^[a-z0-9_-]{3,40}$'),
-  constraint shift_payload_object check (jsonb_typeof(payload) = 'object'),
-  constraint shift_payload_size check (octet_length(payload::text) <= 500000)
-);
-
-alter table rev2.shift_workspaces enable row level security;
-revoke all on table rev2.shift_workspaces from public, anon, authenticated;
-
 create or replace function rev2.get_shift_workspace(
   p_workspace_key text,
   p_access_code text
@@ -110,5 +96,3 @@ revoke all on function rev2.get_shift_workspace(text, text) from public;
 revoke all on function rev2.save_shift_workspace(text, text, jsonb, bigint) from public;
 grant execute on function rev2.get_shift_workspace(text, text) to anon, authenticated;
 grant execute on function rev2.save_shift_workspace(text, text, jsonb, bigint) to anon, authenticated;
-
-comment on table rev2.shift_workspaces is 'つばさ3シフト共有状態。直接参照不可、共有番号検証付きRPCのみ使用。';

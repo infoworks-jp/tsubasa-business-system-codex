@@ -380,6 +380,7 @@
         <div class="voice-title" id="voiceTitle">🎤 話してシフト入力</div>
         <div class="voice-help">
           例：「9月20日、植山、17時から23時」または「9月20日、植山、休み」。<br />
+          <b>iPhoneは下の入力欄を押し、キーボード右下の🎤で話すのが確実です。</b><br />
           内容を画面と音声で確認してから登録するので、聞き間違いをそのまま保存しません。
         </div>
         <div class="voice-row">
@@ -408,17 +409,17 @@
       <section class="card" aria-labelledby="syncTitle">
         <b id="syncTitle">📱 PC・スマホで共有</b>
         <div class="small" style="margin: 6px 0">
-          最初に6文字以上の共有番号を決めます。ほかの端末でも同じ番号を入力すると同じシフト表を読み書きできます。
+          共有番号は「0096」です。ほかの端末でも同じ番号で同じシフト表を読み書きできます。
         </div>
         <div class="sync-row">
           <input
             id="shareCode"
             type="password"
-            minlength="6"
+            minlength="4"
             maxlength="64"
             inputmode="numeric"
             autocomplete="off"
-            placeholder="共有番号（6文字以上）"
+            placeholder="共有番号（4文字以上）"
             aria-label="シフト共有番号"
           />
           <button id="cloudLoad" type="button">共有データを読込</button>
@@ -588,9 +589,15 @@
         }
         function parseVoiceCommand(input) {
           const text = normalizeSpeech(input);
-          const staff = state.staff.filter(
-            (person) => person.name && text.includes(person.name),
-          );
+          const aliases = {
+            植山: ["植山", "上山", "うえやま", "ウエヤマ"],
+            中山: ["中山", "なかやま", "ナカヤマ"],
+            東出: ["東出", "ひがしで", "ヒガシデ"],
+          };
+          const staff = state.staff.filter((person) => {
+            const names = aliases[person.name] || [person.name];
+            return person.name && names.some((name) => text.includes(name));
+          });
           if (staff.length !== 1)
             throw new Error(
               staff.length
@@ -722,8 +729,8 @@
         }
         function shareCode() {
           const code = $("shareCode").value.trim();
-          if (code.length < 6)
-            throw new Error("共有番号を6文字以上で入力してください");
+          if (code.length < 4)
+            throw new Error("共有番号を4文字以上で入力してください");
           localStorage.setItem("tsubasa_shift_share_code", code);
           return code;
         }
@@ -1013,10 +1020,17 @@
         $("cloudLoad").addEventListener("click", loadCloud);
         $("cloudSave").addEventListener("click", saveCloud);
         $("shareCode").value =
-          localStorage.getItem("tsubasa_shift_share_code") || "";
+          localStorage.getItem("tsubasa_shift_share_code") || "0096";
         const Recognition =
           window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (Recognition) {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const useKeyboardDictation = () => {
+          $("voiceText").focus();
+          setVoiceStatus(
+            "入力欄を押しました。iPhoneのキーボード右下にある🎤を押して話し、最後に「内容を確認」を押してください。",
+          );
+        };
+        if (Recognition && !isIOS) {
           const recognition = new Recognition();
           recognition.lang = "ja-JP";
           recognition.interimResults = false;
@@ -1048,11 +1062,10 @@
             } catch (_) {}
           });
         } else {
-          $("voiceBtn").disabled = true;
-          $("voiceBtn").textContent = "このブラウザは音声非対応";
+          $("voiceBtn").textContent = "📱 iPhoneのキーボードで話す";
+          $("voiceBtn").addEventListener("click", useKeyboardDictation);
           setVoiceStatus(
-            "音声に対応していません。入力欄またはスマホキーボードのマイクを使ってください。",
-            true,
+            "iPhoneでは入力欄を押し、キーボード右下の🎤を使ってください。",
           );
         }
         window.__shiftVoice = {

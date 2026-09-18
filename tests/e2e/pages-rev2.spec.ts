@@ -269,6 +269,12 @@ test('シフトを音声相当の文章から確認後に登録できる', async
   await page.goto('/shift/', { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#shareCode')).toHaveValue('0096');
+
+  const alias = await page.evaluate(() => (window as typeof window & {
+    __shiftVoice: { parse: (text: string) => { staffName: string } };
+  }).__shiftVoice.parse('9月20日、上山、17時から23時'));
+  expect(alias.staffName).toBe('植山');
 
   await page.locator('#voiceText').fill('9月20日、植山、17時から23時');
   await page.locator('#parseBtn').click();
