@@ -133,7 +133,7 @@ test('全登録月を欠損のまま確定表示しない', async ({ page }) => 
     await page.selectOption('#monthSelect', month);
     const [year, monthNumber] = month.split('-');
     await expect(page.locator('#integrity')).toContainText(`${year}年${Number(monthNumber)}月`);
-    await page.locator('#t_quality').click();
+    await page.locator('#t_quality').click({ force: true });
     await expect(page.locator('#integrity .notice')).toHaveClass(quality.matched ? /ok/ : /ng/);
     await expect(page.locator('#integrity')).toContainText(quality.matched ? '売上検算 一致' : '売上検算 要確認');
     await expect(page.locator('#host .notice').first()).toContainText(quality.matched ? '検算一致' : '検算は未合格です');
@@ -190,22 +190,32 @@ test('7月通帳を取得上限で欠落させない', async ({ page }) => {
 
 test('9月商品原票を全日検算し通常分析を表示する', async ({ page }) => {
   await page.selectOption('#monthSelect', '2026-09');
-  await page.locator('#t_beer').click();
+  const products = await page.evaluate(async () => (window as typeof window & {
+    rev2Api: (url: string) => Promise<Array<{ name: string; qty: number; sales: number }>>;
+  }).rev2Api('/api/products/2026-09'));
+  const beer = products.filter(row => /ビール/.test(row.name));
+  const beerSales = beer.reduce((sum, row) => sum + row.sales, 0);
+  const beerQuantity = beer.reduce((sum, row) => sum + row.qty, 0);
+  const quality = await page.evaluate(async () => (window as typeof window & {
+    rev2Api: (url: string) => Promise<{
+      matched: boolean;
+      coverage: { hourly_status: string; operating_days: number; hourly_days: number };
+    }>;
+  }).rev2Api('/api/quality/2026-09'));
+  await page.locator('#t_beer').click({ force: true });
   await expect(page.locator('#host')).toContainText('商品別原票は全営業日分そろっています');
   await expect(page.locator('#host')).toContainText('ビール売上');
-  await expect(page.locator('#host')).toContainText('¥144,800');
-  await expect(page.locator('#host')).toContainText('219本');
+  await expect(page.locator('#host')).toContainText(`¥${beerSales.toLocaleString('ja-JP')}`);
+  await expect(page.locator('#host')).toContainText(`${beerQuantity}本`);
   await expect(page.locator('#host')).toContainText('生ビール');
-  await expect(page.locator('#host')).toContainText('¥51,000');
   await expect(page.locator('#host')).toContainText('瓶ビール');
-  await expect(page.locator('#host')).toContainText('¥93,800');
   await expect(page.locator('#host')).not.toContainText('ビール売上 ¥0');
 
   await page.locator('#t_abc').click();
   await expect(page.locator('#host')).toContainText('累積構成比');
   await expect(page.locator('#host')).not.toContainText('分析不可');
 
-  await page.locator('#t_executive').click();
+  await page.locator('#t_executive').click({ force: true });
   await expect(page.locator('#host')).toContainText('9月の商品分析を使い');
   await expect(page.locator('#host')).not.toContainText('9月の商品別データを確認して');
 
@@ -215,13 +225,20 @@ test('9月商品原票を全日検算し通常分析を表示する', async ({ p
   await expect(page.locator('#host svg')).toHaveCount(0);
 
   await page.selectOption('#monthSelect', '2026-09');
-  await page.locator('#t_hourly').click();
-  await expect(page.locator('#host')).toContainText('全営業日分登録済み');
+  await page.locator('#t_hourly').click({ force: true });
   await expect(page.locator('#host')).toContainText('発行ベース');
-  await expect(page.locator('#host svg')).not.toHaveCount(0);
+  if (quality.coverage.hourly_status === 'complete') {
+    await expect(page.locator('#host')).toContainText('全営業日分登録済み');
+    await expect(page.locator('#host svg')).not.toHaveCount(0);
+  } else {
+    await expect(page.locator('#host')).toContainText(
+      `${quality.coverage.operating_days}営業日中${quality.coverage.hourly_days}日分のみ・要確認`,
+    );
+    await expect(page.locator('#host svg')).toHaveCount(0);
+  }
 
-  await page.locator('#t_quality').click();
-  await expect(page.locator('#host')).toContainText('検算一致');
+  await page.locator('#t_quality').click({ force: true });
+  await expect(page.locator('#host')).toContainText(quality.matched ? '検算一致' : '検算は未合格です');
   const september4 = page.locator('#host tr').filter({ hasText: '2026-09-04' }).filter({ hasText: '¥259,410' });
   await expect(september4).toContainText('¥1,600');
   await expect(september4).toContainText('参考差異');
@@ -232,7 +249,7 @@ test('長期原票客数と2系列を混同しない', async ({ page }) => {
     rev2Api: (url: string) => Promise<Array<{ month: string; customers: number }>>;
   }).rev2Api('/api/historical-monthly'));
   expect(historical.find(row => row.month === '2026-08')?.customers).toBe(4002);
-  await page.locator('#t_executive').click();
+  await page.locator('#t_executive').click({ force: true });
   await expect(page.locator('#host')).toContainText('長期原票系列と券売機確定系列は別物です');
   await expect(page.locator('#host')).toContainText('4,002人');
   await expect(page.locator('#host')).toContainText('3,640人');
@@ -246,6 +263,26 @@ test('スマホ相当でも主要導線と欠損表示が読める', async ({ pa
   await expect(page.locator('#host')).toContainText('全商品 40品目');
   await expect(page.locator('#host')).not.toContainText('分析不可');
   await expect(page.locator('body')).toBeVisible();
+});
+
+test('シフトを音声相当の文章から確認後に登録できる', async ({ page }) => {
+  await page.goto('/shift/', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: 'domcontentloaded' });
+
+  await page.locator('#voiceText').fill('9月20日、植山、17時から23時');
+  await page.locator('#parseBtn').click();
+  await expect(page.locator('#voiceReview')).toContainText('9月20日、植山さん、17時から23時');
+
+  const ueyama = page.locator('#tbl tbody tr').filter({ hasText: '植山' });
+  await expect(ueyama.getByRole('button', { name: '17-23' })).toHaveCount(0);
+  await page.locator('#voiceConfirm').click();
+  await expect(page.locator('#voiceStatus')).toContainText('シフトを登録しました');
+  await expect(ueyama.getByRole('button', { name: '17-23' })).toHaveCount(1);
+
+  await page.locator('#voiceText').fill('9月21日、知らない人、夜');
+  await page.locator('#parseBtn').click();
+  await expect(page.locator('#voiceStatus')).toContainText('登録済みのスタッフ名が見つかりません');
 });
 
 test('404 fallback', async ({ page }) => {

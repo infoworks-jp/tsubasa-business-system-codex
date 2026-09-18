@@ -1,1 +1,1071 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>つばさシフト</title><link rel="manifest" href="./manifest.webmanifest"><meta name="theme-color" content="#15395b"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="つばさシフト"><link rel="apple-touch-icon" href="./icon.svg"><style>:root{--n:#15395b;--bg:#f4f7fb;--line:#d7e1ec}*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;background:var(--bg);color:#1f2937}header{position:sticky;top:0;z-index:10;background:var(--n);color:#fff;padding:12px}h1{font-size:18px;margin:0 0 8px}.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center}.bar button,.bar select,.back{border:0;border-radius:8px;padding:10px 11px;font-weight:800;font:inherit}.back{text-decoration:none;background:#fff;color:var(--n)}main{padding:10px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.k{background:#f8fbff;border:1px solid #dbe7f3;border-radius:9px;padding:8px}.k b{display:block;font-size:20px;color:var(--n)}.small{font-size:11px;color:#667085}.settings{display:grid;grid-template-columns:1.5fr .8fr .8fr 1fr;gap:5px;margin:5px 0}.settings input,.settings select{min-width:0;padding:8px;border:1px solid var(--line);border-radius:7px}.wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{border-collapse:separate;border-spacing:0;min-width:1180px;width:100%}th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:5px;text-align:center}th{background:#eaf2fb;color:var(--n);font-size:12px}th:first-child,td:first-child{position:sticky;left:0;background:#fff;min-width:125px;text-align:left;z-index:2}.name{font-weight:900}.meta{font-size:10px;color:#667085}.cell{width:82px;min-height:42px;border:1px solid #ccd8e5;border-radius:7px;background:#fff;font-weight:800;color:var(--n)}.rest{background:#eee;color:#777}.night{background:#f1efff}.peak{background:#fff0f0}.modal{display:none;position:fixed;inset:0;background:#0009;z-index:9999;align-items:center;justify-content:center;padding:14px}.modal.on{display:flex}.box{background:#fff;border-radius:16px;padding:14px;width:min(500px,96vw);max-height:88vh;overflow:auto}.box h2{margin:0 0 10px;color:var(--n)}.choices{display:grid;grid-template-columns:1fr 1fr;gap:9px}.choices button{min-height:66px;border:2px solid var(--line);border-radius:11px;font-size:16px;font-weight:900;background:#f8fbff}.choices .day{background:#eef9ef}.choices .nightb{background:#f2efff}.choices .off{background:#fff0f0}#detail,#close{width:100%;margin-top:10px;padding:13px;border:0;border-radius:10px;font-weight:900;font-size:16px}#detail{background:#eef2f7;color:var(--n)}#close{background:#17365d;color:#fff}.times{display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.times select,.times button{padding:11px;border:1px solid var(--line);border-radius:8px;font-size:16px}@media(max-width:700px){.kpis{grid-template-columns:1fr 1fr}.settings{grid-template-columns:1fr 1fr}}</style></head><body><header><h1>味一番つばさ｜シフト</h1><div class="bar"><a class="back" href="../">← つばさ3</a><button id="prev" type="button">←前月</button><select id="month"></select><button id="next" type="button">次月→</button><button id="saveBtn" type="button">保存</button></div></header><main><div class="card"><div class="kpis"><div class="k"><span class="small">バイト予定時間</span><b id="hours">0h</b></div><div class="k"><span class="small">バイト概算給与</span><b id="cost">¥0</b></div><div class="k"><span class="small">深夜時間</span><b id="deep">0h</b></div></div></div><div class="card"><div class="small">マスを押して「昼・夜・深夜・休み」を選ぶだけ。22時以降は深夜割増25%で概算。</div></div><div class="card"><b>スタッフ設定</b><div id="staff"></div><button id="addBtn" type="button">＋追加</button></div><div class="card"><div class="wrap"><table id="tbl"></table></div></div></main><div id="modal" class="modal" aria-hidden="true"><div class="box" role="dialog" aria-modal="true"><h2 id="modalTitle">勤務時間</h2><div class="choices"><button type="button" class="day" data-v="11-18">☀ 昼<br><small>11〜18</small></button><button type="button" data-v="18-23">🌆 夜<br><small>18〜23</small></button><button type="button" class="nightb" data-v="20-2">🌙 深夜<br><small>20〜2</small></button><button type="button" class="off" data-v="休">休み</button></div><button id="detail" type="button">時間を細かく変える</button><div id="times" class="times"><select id="startTime"></select> 〜 <select id="endTime"></select><button id="applyBtn" type="button">決定</button><button id="clearBtn" type="button">空欄</button></div><button id="close" type="button">閉じる</button></div></div><script>(()=>{'use strict';const KEY='tsubasa_shift_pwa_v2',WD=['日','月','火','水','木','金','土'],uid=()=>Math.random().toString(36).slice(2)+Date.now();let state={month:'2026-09',staff:[{id:uid(),name:'植山',type:'社員',rate:0,group:'夜メイン'},{id:uid(),name:'中山',type:'社員',rate:0,group:'昼・夜ヘルプ'},{id:uid(),name:'東出',type:'社員',rate:0,group:'昼のみ'},{id:uid(),name:'バイトA',type:'バイト',rate:1100,group:'終電組'},{id:uid(),name:'バイトB',type:'バイト',rate:1100,group:'深夜組'},{id:uid(),name:'バイトC',type:'バイト',rate:1100,group:'ピーク補助'}],shifts:{}};try{const old=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem('tsubasa_shift_pwa_v1')||'null');if(old)state=old}catch(e){}let current=null;const $=id=>document.getElementById(id),monthEl=$('month'),staffEl=$('staff'),tbl=$('tbl'),modal=$('modal'),modalTitle=$('modalTitle'),times=$('times'),startTime=$('startTime'),endTime=$('endTime'),hours=$('hours'),cost=$('cost'),deep=$('deep');function save(){localStorage.setItem(KEY,JSON.stringify(state))}function parseShift(v){v=(v||'').replace(/〜|～/g,'-').trim();if(!v||v==='休')return null;const m=v.match(/^(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?$/);if(!m)return null;let a=+m[1]+(+m[2]||0)/60,b=+m[3]+(+m[4]||0)/60;if(b<=a)b+=24;return{a,b,h:b-a}}function nightHours(q){return q?Math.max(0,Math.min(q.b,29)-Math.max(q.a,22)):0}function parts(){return state.month.split('-').map(Number)}function days(){const[y,m]=parts();return new Date(y,m,0).getDate()}function key(d){return state.month+'-'+String(d).padStart(2,'0')}function renderMonth(){monthEl.innerHTML='';for(let y=2026;y<=2027;y++)for(let m=1;m<=12;m++){const v=y+'-'+String(m).padStart(2,'0');monthEl.add(new Option(y+'年'+m+'月',v))}monthEl.value=state.month}function renderStaff(){staffEl.innerHTML='';state.staff.forEach(x=>{const r=document.createElement('div');r.className='settings';const name=document.createElement('input');name.value=x.name;const type=document.createElement('select');type.add(new Option('社員','社員'));type.add(new Option('バイト','バイト'));type.value=x.type;const rate=document.createElement('input');rate.type='number';rate.value=x.rate||0;const group=document.createElement('input');group.value=x.group||'';name.addEventListener('change',e=>{x.name=e.target.value;save();render()});type.addEventListener('change',e=>{x.type=e.target.value;save();render()});rate.addEventListener('change',e=>{x.rate=Number(e.target.value||0);save();calc()});group.addEventListener('change',e=>{x.group=e.target.value;save();render()});r.append(name,type,rate,group);staffEl.append(r)})}function renderTable(){const n=days(),[y,m]=parts();let h='<thead><tr><th>スタッフ</th>';for(let d=1;d<=n;d++){const w=new Date(y,m-1,d).getDay();h+=`<th>${d}<br>${WD[w]}</th>`}h+='<th>計</th></tr></thead><tbody>';state.staff.forEach(x=>{h+=`<tr><td><div class="name">${x.name}</div><div class="meta">${x.type}｜${x.group||''}${x.type==='バイト'?'｜¥'+x.rate:''}</div></td>`;let total=0;for(let d=1;d<=n;d++){const v=(state.shifts[key(d)]||{})[x.id]||'',q=parseShift(v);if(q)total+=q.h;const cl=v==='休'?'rest':q&&q.b>24?'night':q&&q.a<=20&&q.b>=23?'peak':'';h+=`<td><button type="button" class="cell ${cl}" data-day="${d}" data-staff="${x.id}">${v||'選ぶ'}</button></td>`}h+=`<td><b>${total.toFixed(1)}h</b></td></tr>`});h+='</tbody>';tbl.innerHTML=h;tbl.querySelectorAll('.cell').forEach(btn=>btn.addEventListener('click',()=>openModal(Number(btn.dataset.day),btn.dataset.staff)))}function calc(){let H=0,N=0,K=0;for(let d=1;d<=days();d++)for(const x of state.staff){const v=(state.shifts[key(d)]||{})[x.id]||'',q=parseShift(v);if(x.type==='バイト'&&q){const z=nightHours(q);H+=q.h;N+=z;K+=(q.h-z)*x.rate+z*x.rate*1.25}}hours.textContent=H.toFixed(1)+'h';deep.textContent=N.toFixed(1)+'h';cost.textContent='¥'+Math.round(K).toLocaleString()}function render(){renderMonth();renderStaff();renderTable();calc()}function openModal(day,staffId){current={day,staffId};const x=state.staff.find(z=>z.id===staffId);modalTitle.textContent=day+'日｜'+(x?x.name:'');times.style.display='none';modal.classList.add('on');modal.setAttribute('aria-hidden','false')}function closeModal(){modal.classList.remove('on');modal.setAttribute('aria-hidden','true');current=null}function setValue(v){if(!current)return closeModal();const k=key(current.day);state.shifts[k]||={};state.shifts[k][current.staffId]=v;save();closeModal();render()}document.querySelectorAll('[data-v]').forEach(btn=>btn.addEventListener('click',()=>setValue(btn.dataset.v)));$('detail').addEventListener('click',()=>{times.style.display=times.style.display==='block'?'none':'block'});$('applyBtn').addEventListener('click',()=>setValue(startTime.value+'-'+endTime.value));$('clearBtn').addEventListener('click',()=>setValue(''));$('close').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();closeModal()});modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});for(let h=0;h<24;h++)for(const mm of[0,30]){const v=mm?h+':30':String(h);startTime.add(new Option(v,v));endTime.add(new Option(v,v))}startTime.value='18';endTime.value='23';$('prev').addEventListener('click',()=>{let[y,m]=parts();m--;if(m<1){m=12;y--}state.month=y+'-'+String(m).padStart(2,'0');save();render()});$('next').addEventListener('click',()=>{let[y,m]=parts();m++;if(m>12){m=1;y++}state.month=y+'-'+String(m).padStart(2,'0');save();render()});monthEl.addEventListener('change',e=>{state.month=e.target.value;save();render()});$('saveBtn').addEventListener('click',()=>{save();const b=$('saveBtn');b.textContent='保存済み✓';setTimeout(()=>b.textContent='保存',800)});$('addBtn').addEventListener('click',()=>{state.staff.push({id:uid(),name:'新規',type:'バイト',rate:1100,group:''});save();render()});render();if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));})();</script></body></html>
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>つばさシフト</title>
+    <link rel="icon" href="./icon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#15395b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="つばさシフト" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <style>
+      :root {
+        --n: #15395b;
+        --bg: #f4f7fb;
+        --line: #d7e1ec;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic",
+          Meiryo, sans-serif;
+        background: var(--bg);
+        color: #1f2937;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--n);
+        color: #fff;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      .bar {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .bar button,
+      .bar select,
+      .back {
+        border: 0;
+        border-radius: 8px;
+        padding: 10px 11px;
+        font-weight: 800;
+        font: inherit;
+      }
+      .back {
+        text-decoration: none;
+        background: #fff;
+        color: var(--n);
+      }
+      main {
+        padding: 10px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .k {
+        background: #f8fbff;
+        border: 1px solid #dbe7f3;
+        border-radius: 9px;
+        padding: 8px;
+      }
+      .k b {
+        display: block;
+        font-size: 20px;
+        color: var(--n);
+      }
+      .small {
+        font-size: 11px;
+        color: #667085;
+      }
+      .settings {
+        display: grid;
+        grid-template-columns: 1.5fr 0.8fr 0.8fr 1fr;
+        gap: 5px;
+        margin: 5px 0;
+      }
+      .settings input,
+      .settings select {
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+      }
+      .wrap {
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      table {
+        border-collapse: separate;
+        border-spacing: 0;
+        min-width: 1180px;
+        width: 100%;
+      }
+      th,
+      td {
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        padding: 5px;
+        text-align: center;
+      }
+      th {
+        background: #eaf2fb;
+        color: var(--n);
+        font-size: 12px;
+      }
+      th:first-child,
+      td:first-child {
+        position: sticky;
+        left: 0;
+        background: #fff;
+        min-width: 125px;
+        text-align: left;
+        z-index: 2;
+      }
+      .name {
+        font-weight: 900;
+      }
+      .meta {
+        font-size: 10px;
+        color: #667085;
+      }
+      .cell {
+        width: 82px;
+        min-height: 42px;
+        border: 1px solid #ccd8e5;
+        border-radius: 7px;
+        background: #fff;
+        font-weight: 800;
+        color: var(--n);
+      }
+      .rest {
+        background: #eee;
+        color: #777;
+      }
+      .night {
+        background: #f1efff;
+      }
+      .peak {
+        background: #fff0f0;
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #0009;
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+      }
+      .modal.on {
+        display: flex;
+      }
+      .box {
+        background: #fff;
+        border-radius: 16px;
+        padding: 14px;
+        width: min(500px, 96vw);
+        max-height: 88vh;
+        overflow: auto;
+      }
+      .box h2 {
+        margin: 0 0 10px;
+        color: var(--n);
+      }
+      .choices {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+      }
+      .choices button {
+        min-height: 66px;
+        border: 2px solid var(--line);
+        border-radius: 11px;
+        font-size: 16px;
+        font-weight: 900;
+        background: #f8fbff;
+      }
+      .choices .day {
+        background: #eef9ef;
+      }
+      .choices .nightb {
+        background: #f2efff;
+      }
+      .choices .off {
+        background: #fff0f0;
+      }
+      #detail,
+      #close {
+        width: 100%;
+        margin-top: 10px;
+        padding: 13px;
+        border: 0;
+        border-radius: 10px;
+        font-weight: 900;
+        font-size: 16px;
+      }
+      #detail {
+        background: #eef2f7;
+        color: var(--n);
+      }
+      #close {
+        background: #17365d;
+        color: #fff;
+      }
+      .times {
+        display: none;
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+      .times select,
+      .times button {
+        padding: 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 16px;
+      }
+      .voice-card {
+        border: 3px solid #2d6a4f;
+        background: #f0fff6;
+      }
+      .voice-title {
+        font-size: 20px;
+        font-weight: 900;
+        color: #14532d;
+        margin-bottom: 8px;
+      }
+      .voice-help {
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 10px;
+      }
+      .voice-row,
+      .sync-row,
+      .confirm-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      #voiceBtn {
+        min-height: 64px;
+        flex: 1 1 220px;
+        border: 0;
+        border-radius: 13px;
+        background: #16794b;
+        color: #fff;
+        font-size: 20px;
+        font-weight: 900;
+      }
+      #voiceBtn.listening {
+        background: #b91c1c;
+        animation: pulse 1s infinite;
+      }
+      #voiceText {
+        flex: 3 1 280px;
+        min-height: 64px;
+        padding: 12px;
+        border: 2px solid #9bc9b2;
+        border-radius: 10px;
+        font-size: 18px;
+      }
+      #parseBtn,
+      .confirm-actions button,
+      .sync-row button,
+      .sync-row input {
+        min-height: 48px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        font-size: 16px;
+        font-weight: 800;
+      }
+      #parseBtn,
+      #voiceConfirm,
+      #cloudSave {
+        background: var(--n);
+        color: #fff;
+      }
+      #voiceReview {
+        display: none;
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 10px;
+        background: #fff;
+        border: 2px solid #16794b;
+        font-size: 17px;
+        line-height: 1.6;
+      }
+      #voiceReview.on {
+        display: block;
+      }
+      .sync-status {
+        margin-top: 8px;
+        padding: 8px;
+        border-radius: 8px;
+        background: #eef2f7;
+        font-weight: 700;
+      }
+      .sync-status.ok {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .sync-status.bad {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.65;
+        }
+      }
+      @media (max-width: 700px) {
+        .kpis {
+          grid-template-columns: 1fr 1fr;
+        }
+        .settings {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>味一番つばさ｜シフト</h1>
+      <div class="bar">
+        <a class="back" href="../">← つばさ3</a
+        ><button id="prev" type="button">←前月</button
+        ><select id="month"></select
+        ><button id="next" type="button">次月→</button
+        ><button id="saveBtn" type="button">保存</button>
+      </div>
+    </header>
+    <main>
+      <div class="card">
+        <div class="kpis">
+          <div class="k">
+            <span class="small">バイト予定時間</span><b id="hours">0h</b>
+          </div>
+          <div class="k">
+            <span class="small">バイト概算給与</span><b id="cost">¥0</b>
+          </div>
+          <div class="k">
+            <span class="small">深夜時間</span><b id="deep">0h</b>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="small">
+          マスを押して「昼・夜・深夜・休み」を選ぶだけ。22時以降は深夜割増25%で概算。
+        </div>
+      </div>
+      <section class="card voice-card" aria-labelledby="voiceTitle">
+        <div class="voice-title" id="voiceTitle">🎤 話してシフト入力</div>
+        <div class="voice-help">
+          例：「9月20日、植山、17時から23時」または「9月20日、植山、休み」。<br />
+          内容を画面と音声で確認してから登録するので、聞き間違いをそのまま保存しません。
+        </div>
+        <div class="voice-row">
+          <button id="voiceBtn" type="button">🎤 押して話す</button>
+          <input
+            id="voiceText"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            placeholder="ここへ直接入力しても使えます"
+            aria-label="音声または文字によるシフト入力"
+          />
+          <button id="parseBtn" type="button">内容を確認</button>
+        </div>
+        <div id="voiceStatus" class="sync-status" role="status">
+          マイクボタンを押して話してください。
+        </div>
+        <div id="voiceReview" aria-live="polite">
+          <b id="voiceSummary"></b>
+          <div class="confirm-actions">
+            <button id="voiceConfirm" type="button">この内容で登録</button>
+            <button id="voiceCancel" type="button">やり直す</button>
+          </div>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="syncTitle">
+        <b id="syncTitle">📱 PC・スマホで共有</b>
+        <div class="small" style="margin: 6px 0">
+          最初に6文字以上の共有番号を決めます。ほかの端末でも同じ番号を入力すると同じシフト表を読み書きできます。
+        </div>
+        <div class="sync-row">
+          <input
+            id="shareCode"
+            type="password"
+            minlength="6"
+            maxlength="64"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="共有番号（6文字以上）"
+            aria-label="シフト共有番号"
+          />
+          <button id="cloudLoad" type="button">共有データを読込</button>
+          <button id="cloudSave" type="button">共有データへ保存</button>
+        </div>
+        <div id="cloudStatus" class="sync-status" role="status">
+          現在はこの端末に保存されています。
+        </div>
+      </section>
+      <div class="card">
+        <b>スタッフ設定</b>
+        <div id="staff"></div>
+        <button id="addBtn" type="button">＋追加</button>
+      </div>
+      <div class="card">
+        <div class="wrap"><table id="tbl"></table></div>
+      </div>
+    </main>
+    <div id="modal" class="modal" aria-hidden="true">
+      <div class="box" role="dialog" aria-modal="true">
+        <h2 id="modalTitle">勤務時間</h2>
+        <div class="choices">
+          <button type="button" class="day" data-v="11-18">
+            ☀ 昼<br /><small>11〜18</small></button
+          ><button type="button" data-v="18-23">
+            🌆 夜<br /><small>18〜23</small></button
+          ><button type="button" class="nightb" data-v="20-2">
+            🌙 深夜<br /><small>20〜2</small></button
+          ><button type="button" class="off" data-v="休">休み</button>
+        </div>
+        <button id="detail" type="button">時間を細かく変える</button>
+        <div id="times" class="times">
+          <select id="startTime"></select>
+          〜
+          <select id="endTime"></select
+          ><button id="applyBtn" type="button">決定</button
+          ><button id="clearBtn" type="button">空欄</button>
+        </div>
+        <button id="close" type="button">閉じる</button>
+      </div>
+    </div>
+    <script src="../site-config.js?v=20260918-shift-voice"></script>
+    <script>
+      (() => {
+        "use strict";
+        const KEY = "tsubasa_shift_pwa_v2",
+          WD = ["日", "月", "火", "水", "木", "金", "土"],
+          uid = () => Math.random().toString(36).slice(2) + Date.now();
+        let state = {
+          month: "2026-09",
+          staff: [
+            {
+              id: uid(),
+              name: "植山",
+              type: "社員",
+              rate: 0,
+              group: "夜メイン",
+            },
+            {
+              id: uid(),
+              name: "中山",
+              type: "社員",
+              rate: 0,
+              group: "昼・夜ヘルプ",
+            },
+            { id: uid(), name: "東出", type: "社員", rate: 0, group: "昼のみ" },
+            {
+              id: uid(),
+              name: "バイトA",
+              type: "バイト",
+              rate: 1100,
+              group: "終電組",
+            },
+            {
+              id: uid(),
+              name: "バイトB",
+              type: "バイト",
+              rate: 1100,
+              group: "深夜組",
+            },
+            {
+              id: uid(),
+              name: "バイトC",
+              type: "バイト",
+              rate: 1100,
+              group: "ピーク補助",
+            },
+          ],
+          shifts: {},
+        };
+        try {
+          const old = JSON.parse(
+            localStorage.getItem(KEY) ||
+              localStorage.getItem("tsubasa_shift_pwa_v1") ||
+              "null",
+          );
+          if (old) state = old;
+        } catch (e) {}
+        let current = null,
+          pendingVoice = null,
+          cloudRevision = Number(
+            localStorage.getItem("tsubasa_shift_cloud_revision") || 0,
+          );
+        const $ = (id) => document.getElementById(id),
+          monthEl = $("month"),
+          staffEl = $("staff"),
+          tbl = $("tbl"),
+          modal = $("modal"),
+          modalTitle = $("modalTitle"),
+          times = $("times"),
+          startTime = $("startTime"),
+          endTime = $("endTime"),
+          hours = $("hours"),
+          cost = $("cost"),
+          deep = $("deep");
+        function save() {
+          localStorage.setItem(KEY, JSON.stringify(state));
+        }
+        function parseShift(v) {
+          v = (v || "").replace(/〜|～/g, "-").trim();
+          if (!v || v === "休") return null;
+          const m = v.match(/^(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?$/);
+          if (!m) return null;
+          let a = +m[1] + (+m[2] || 0) / 60,
+            b = +m[3] + (+m[4] || 0) / 60;
+          if (b <= a) b += 24;
+          return { a, b, h: b - a };
+        }
+        function nightHours(q) {
+          return q ? Math.max(0, Math.min(q.b, 29) - Math.max(q.a, 22)) : 0;
+        }
+        function parts() {
+          return state.month.split("-").map(Number);
+        }
+        function days() {
+          const [y, m] = parts();
+          return new Date(y, m, 0).getDate();
+        }
+        function key(d) {
+          return state.month + "-" + String(d).padStart(2, "0");
+        }
+        function speak(message) {
+          if (!("speechSynthesis" in window)) return;
+          speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(message);
+          utterance.lang = "ja-JP";
+          utterance.rate = 0.9;
+          speechSynthesis.speak(utterance);
+        }
+        function setVoiceStatus(message, bad = false) {
+          const el = $("voiceStatus");
+          el.textContent = message;
+          el.className = "sync-status " + (bad ? "bad" : "ok");
+        }
+        function normalizeSpeech(text) {
+          return String(text || "")
+            .normalize("NFKC")
+            .replace(/[、。]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+        function voiceTime(hour, minutes, half) {
+          const minute = half ? 30 : Number(minutes || 0);
+          return minute
+            ? `${Number(hour)}:${String(minute).padStart(2, "0")}`
+            : String(Number(hour));
+        }
+        function parseVoiceCommand(input) {
+          const text = normalizeSpeech(input);
+          const staff = state.staff.filter(
+            (person) => person.name && text.includes(person.name),
+          );
+          if (staff.length !== 1)
+            throw new Error(
+              staff.length
+                ? "スタッフ名を1人だけ話してください"
+                : "登録済みのスタッフ名が見つかりません",
+            );
+          const today = new Date();
+          let year, month, day;
+          const full = text.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日/),
+            monthDay = text.match(/(\d{1,2})月(\d{1,2})日/),
+            onlyDay = text.match(/(?:^|\s)(\d{1,2})日(?:\s|$)/);
+          if (full) [year, month, day] = full.slice(1).map(Number);
+          else if (monthDay) {
+            year = Number(state.month.slice(0, 4));
+            month = Number(monthDay[1]);
+            day = Number(monthDay[2]);
+          } else if (/明日/.test(text)) {
+            const d = new Date(
+              today.getFullYear(),
+              today.getMonth(),
+              today.getDate() + 1,
+            );
+            year = d.getFullYear();
+            month = d.getMonth() + 1;
+            day = d.getDate();
+          } else if (/今日/.test(text)) {
+            year = today.getFullYear();
+            month = today.getMonth() + 1;
+            day = today.getDate();
+          } else if (onlyDay) {
+            [year, month] = state.month.split("-").map(Number);
+            day = Number(onlyDay[1]);
+          } else
+            throw new Error(
+              "日付が分かりません。「9月20日」のように話してください",
+            );
+          if (
+            month < 1 ||
+            month > 12 ||
+            day < 1 ||
+            day > new Date(year, month, 0).getDate()
+          )
+            throw new Error("日付が正しくありません");
+          let value;
+          if (/休み|休業|公休/.test(text)) value = "休";
+          else {
+            const tm = text.match(
+              /(\d{1,2})時(?:(\d{1,2})分|(半))?\s*(?:から|〜|～|-)\s*(\d{1,2})時(?:(\d{1,2})分|(半))?/,
+            );
+            if (tm)
+              value = `${voiceTime(tm[1], tm[2], tm[3])}-${voiceTime(tm[4], tm[5], tm[6])}`;
+            else if (/深夜/.test(text)) value = "20-2";
+            else if (/昼/.test(text)) value = "11-18";
+            else if (/夜/.test(text)) value = "18-23";
+            else
+              throw new Error(
+                "勤務時間が分かりません。「17時から23時」または「休み」と話してください",
+              );
+          }
+          const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
+          return {
+            yearMonth,
+            day,
+            staffId: staff[0].id,
+            staffName: staff[0].name,
+            value,
+          };
+        }
+        function reviewVoiceInput() {
+          try {
+            pendingVoice = parseVoiceCommand($("voiceText").value);
+            const shiftLabel =
+              pendingVoice.value === "休"
+                ? "休み"
+                : `${pendingVoice.value.replace("-", "時から")}時`;
+            const summary = `${Number(pendingVoice.yearMonth.slice(5))}月${pendingVoice.day}日、${pendingVoice.staffName}さん、${shiftLabel}で登録します。`;
+            $("voiceSummary").textContent = summary;
+            $("voiceReview").classList.add("on");
+            setVoiceStatus(
+              "内容を確認して「この内容で登録」を押してください。",
+            );
+            speak(summary + " よろしいですか？");
+          } catch (error) {
+            pendingVoice = null;
+            $("voiceReview").classList.remove("on");
+            setVoiceStatus(error.message, true);
+            speak(error.message);
+          }
+        }
+        function confirmVoiceInput() {
+          if (!pendingVoice) return;
+          state.month = pendingVoice.yearMonth;
+          const dateKey = `${pendingVoice.yearMonth}-${String(pendingVoice.day).padStart(2, "0")}`;
+          state.shifts[dateKey] ||= {};
+          state.shifts[dateKey][pendingVoice.staffId] = pendingVoice.value;
+          save();
+          const done = `${pendingVoice.staffName}さんの${pendingVoice.day}日のシフトを登録しました。共有する場合は、共有データへ保存を押してください。`;
+          pendingVoice = null;
+          $("voiceText").value = "";
+          $("voiceReview").classList.remove("on");
+          setVoiceStatus(done);
+          render();
+          speak(done);
+        }
+        async function cloudRpc(name, body) {
+          const config = window.TSUBASA_CONFIG;
+          if (!config) throw new Error("共有設定を読み込めません");
+          const response = await fetch(
+            `${config.supabaseUrl}/rest/v1/rpc/${name}`,
+            {
+              method: "POST",
+              cache: "no-store",
+              headers: {
+                apikey: config.publishableKey,
+                Authorization: `Bearer ${config.publishableKey}`,
+                "Content-Type": "application/json",
+                "Accept-Profile": config.schema,
+                "Content-Profile": config.schema,
+              },
+              body: JSON.stringify(body),
+            },
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok)
+            throw new Error(
+              data.message || `共有処理に失敗しました（${response.status}）`,
+            );
+          return data;
+        }
+        function shareCode() {
+          const code = $("shareCode").value.trim();
+          if (code.length < 6)
+            throw new Error("共有番号を6文字以上で入力してください");
+          localStorage.setItem("tsubasa_shift_share_code", code);
+          return code;
+        }
+        function setCloudStatus(message, bad = false) {
+          const el = $("cloudStatus");
+          el.textContent = message;
+          el.className = "sync-status " + (bad ? "bad" : "ok");
+        }
+        async function loadCloud() {
+          try {
+            setCloudStatus("共有データを読み込んでいます…");
+            const result = await cloudRpc("get_shift_workspace", {
+              p_workspace_key: "tsubasa",
+              p_access_code: shareCode(),
+            });
+            if (!result.exists) {
+              cloudRevision = 0;
+              setCloudStatus(
+                "まだ共有データはありません。「共有データへ保存」で作成できます。",
+              );
+              return;
+            }
+            if (
+              !result.payload ||
+              !Array.isArray(result.payload.staff) ||
+              typeof result.payload.shifts !== "object"
+            )
+              throw new Error("共有データの形式が正しくありません");
+            state = result.payload;
+            cloudRevision = Number(result.revision || 0);
+            localStorage.setItem(
+              "tsubasa_shift_cloud_revision",
+              String(cloudRevision),
+            );
+            save();
+            render();
+            setCloudStatus(
+              `共有データを読み込みました（更新 ${new Date(result.updated_at).toLocaleString("ja-JP")}）`,
+            );
+            speak("共有シフトを読み込みました");
+          } catch (error) {
+            setCloudStatus(error.message, true);
+            speak(error.message);
+          }
+        }
+        async function saveCloud() {
+          try {
+            setCloudStatus("共有データへ保存しています…");
+            const result = await cloudRpc("save_shift_workspace", {
+              p_workspace_key: "tsubasa",
+              p_access_code: shareCode(),
+              p_payload: state,
+              p_expected_revision: cloudRevision || null,
+            });
+            cloudRevision = Number(result.revision || 0);
+            localStorage.setItem(
+              "tsubasa_shift_cloud_revision",
+              String(cloudRevision),
+            );
+            setCloudStatus(`共有保存しました（版 ${cloudRevision}）`);
+            speak("共有シフトへ保存しました");
+          } catch (error) {
+            setCloudStatus(error.message, true);
+            speak(error.message);
+          }
+        }
+        function renderMonth() {
+          monthEl.innerHTML = "";
+          for (let y = 2026; y <= 2027; y++)
+            for (let m = 1; m <= 12; m++) {
+              const v = y + "-" + String(m).padStart(2, "0");
+              monthEl.add(new Option(y + "年" + m + "月", v));
+            }
+          monthEl.value = state.month;
+        }
+        function renderStaff() {
+          staffEl.innerHTML = "";
+          state.staff.forEach((x) => {
+            const r = document.createElement("div");
+            r.className = "settings";
+            const name = document.createElement("input");
+            name.value = x.name;
+            const type = document.createElement("select");
+            type.add(new Option("社員", "社員"));
+            type.add(new Option("バイト", "バイト"));
+            type.value = x.type;
+            const rate = document.createElement("input");
+            rate.type = "number";
+            rate.value = x.rate || 0;
+            const group = document.createElement("input");
+            group.value = x.group || "";
+            name.addEventListener("change", (e) => {
+              x.name = e.target.value;
+              save();
+              render();
+            });
+            type.addEventListener("change", (e) => {
+              x.type = e.target.value;
+              save();
+              render();
+            });
+            rate.addEventListener("change", (e) => {
+              x.rate = Number(e.target.value || 0);
+              save();
+              calc();
+            });
+            group.addEventListener("change", (e) => {
+              x.group = e.target.value;
+              save();
+              render();
+            });
+            r.append(name, type, rate, group);
+            staffEl.append(r);
+          });
+        }
+        function renderTable() {
+          const n = days(),
+            [y, m] = parts();
+          let h = "<thead><tr><th>スタッフ</th>";
+          for (let d = 1; d <= n; d++) {
+            const w = new Date(y, m - 1, d).getDay();
+            h += `<th>${d}<br>${WD[w]}</th>`;
+          }
+          h += "<th>計</th></tr></thead><tbody>";
+          state.staff.forEach((x) => {
+            h += `<tr><td><div class="name">${x.name}</div><div class="meta">${x.type}｜${x.group || ""}${x.type === "バイト" ? "｜¥" + x.rate : ""}</div></td>`;
+            let total = 0;
+            for (let d = 1; d <= n; d++) {
+              const v = (state.shifts[key(d)] || {})[x.id] || "",
+                q = parseShift(v);
+              if (q) total += q.h;
+              const cl =
+                v === "休"
+                  ? "rest"
+                  : q && q.b > 24
+                    ? "night"
+                    : q && q.a <= 20 && q.b >= 23
+                      ? "peak"
+                      : "";
+              h += `<td><button type="button" class="cell ${cl}" data-day="${d}" data-staff="${x.id}">${v || "選ぶ"}</button></td>`;
+            }
+            h += `<td><b>${total.toFixed(1)}h</b></td></tr>`;
+          });
+          h += "</tbody>";
+          tbl.innerHTML = h;
+          tbl
+            .querySelectorAll(".cell")
+            .forEach((btn) =>
+              btn.addEventListener("click", () =>
+                openModal(Number(btn.dataset.day), btn.dataset.staff),
+              ),
+            );
+        }
+        function calc() {
+          let H = 0,
+            N = 0,
+            K = 0;
+          for (let d = 1; d <= days(); d++)
+            for (const x of state.staff) {
+              const v = (state.shifts[key(d)] || {})[x.id] || "",
+                q = parseShift(v);
+              if (x.type === "バイト" && q) {
+                const z = nightHours(q);
+                H += q.h;
+                N += z;
+                K += (q.h - z) * x.rate + z * x.rate * 1.25;
+              }
+            }
+          hours.textContent = H.toFixed(1) + "h";
+          deep.textContent = N.toFixed(1) + "h";
+          cost.textContent = "¥" + Math.round(K).toLocaleString();
+        }
+        function render() {
+          renderMonth();
+          renderStaff();
+          renderTable();
+          calc();
+        }
+        function openModal(day, staffId) {
+          current = { day, staffId };
+          const x = state.staff.find((z) => z.id === staffId);
+          modalTitle.textContent = day + "日｜" + (x ? x.name : "");
+          times.style.display = "none";
+          modal.classList.add("on");
+          modal.setAttribute("aria-hidden", "false");
+        }
+        function closeModal() {
+          modal.classList.remove("on");
+          modal.setAttribute("aria-hidden", "true");
+          current = null;
+        }
+        function setValue(v) {
+          if (!current) return closeModal();
+          const k = key(current.day);
+          state.shifts[k] ||= {};
+          state.shifts[k][current.staffId] = v;
+          save();
+          closeModal();
+          render();
+        }
+        document
+          .querySelectorAll("[data-v]")
+          .forEach((btn) =>
+            btn.addEventListener("click", () => setValue(btn.dataset.v)),
+          );
+        $("detail").addEventListener("click", () => {
+          times.style.display =
+            times.style.display === "block" ? "none" : "block";
+        });
+        $("applyBtn").addEventListener("click", () =>
+          setValue(startTime.value + "-" + endTime.value),
+        );
+        $("clearBtn").addEventListener("click", () => setValue(""));
+        $("close").addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          closeModal();
+        });
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) closeModal();
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") closeModal();
+        });
+        for (let h = 0; h < 24; h++)
+          for (const mm of [0, 30]) {
+            const v = mm ? h + ":30" : String(h);
+            startTime.add(new Option(v, v));
+            endTime.add(new Option(v, v));
+          }
+        startTime.value = "18";
+        endTime.value = "23";
+        $("prev").addEventListener("click", () => {
+          let [y, m] = parts();
+          m--;
+          if (m < 1) {
+            m = 12;
+            y--;
+          }
+          state.month = y + "-" + String(m).padStart(2, "0");
+          save();
+          render();
+        });
+        $("next").addEventListener("click", () => {
+          let [y, m] = parts();
+          m++;
+          if (m > 12) {
+            m = 1;
+            y++;
+          }
+          state.month = y + "-" + String(m).padStart(2, "0");
+          save();
+          render();
+        });
+        monthEl.addEventListener("change", (e) => {
+          state.month = e.target.value;
+          save();
+          render();
+        });
+        $("saveBtn").addEventListener("click", () => {
+          save();
+          const b = $("saveBtn");
+          b.textContent = "保存済み✓";
+          setTimeout(() => (b.textContent = "保存"), 800);
+        });
+        $("addBtn").addEventListener("click", () => {
+          state.staff.push({
+            id: uid(),
+            name: "新規",
+            type: "バイト",
+            rate: 1100,
+            group: "",
+          });
+          save();
+          render();
+        });
+        $("parseBtn").addEventListener("click", reviewVoiceInput);
+        $("voiceText").addEventListener("keydown", (event) => {
+          if (event.key === "Enter") reviewVoiceInput();
+        });
+        $("voiceConfirm").addEventListener("click", confirmVoiceInput);
+        $("voiceCancel").addEventListener("click", () => {
+          pendingVoice = null;
+          $("voiceReview").classList.remove("on");
+          setVoiceStatus("もう一度話すか、文字を直してください。");
+        });
+        $("cloudLoad").addEventListener("click", loadCloud);
+        $("cloudSave").addEventListener("click", saveCloud);
+        $("shareCode").value =
+          localStorage.getItem("tsubasa_shift_share_code") || "";
+        const Recognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (Recognition) {
+          const recognition = new Recognition();
+          recognition.lang = "ja-JP";
+          recognition.interimResults = false;
+          recognition.maxAlternatives = 1;
+          recognition.onstart = () => {
+            $("voiceBtn").classList.add("listening");
+            $("voiceBtn").textContent = "🔴 聞いています…";
+            setVoiceStatus("話してください。");
+          };
+          recognition.onend = () => {
+            $("voiceBtn").classList.remove("listening");
+            $("voiceBtn").textContent = "🎤 押して話す";
+          };
+          recognition.onerror = (event) =>
+            setVoiceStatus(
+              event.error === "not-allowed"
+                ? "マイクの使用が許可されていません。ブラウザ設定でマイクを許可してください。"
+                : `音声認識に失敗しました（${event.error}）。文字入力も使えます。`,
+              true,
+            );
+          recognition.onresult = (event) => {
+            $("voiceText").value = event.results[0][0].transcript;
+            setVoiceStatus(`聞き取り：${$("voiceText").value}`);
+            reviewVoiceInput();
+          };
+          $("voiceBtn").addEventListener("click", () => {
+            try {
+              recognition.start();
+            } catch (_) {}
+          });
+        } else {
+          $("voiceBtn").disabled = true;
+          $("voiceBtn").textContent = "このブラウザは音声非対応";
+          setVoiceStatus(
+            "音声に対応していません。入力欄またはスマホキーボードのマイクを使ってください。",
+            true,
+          );
+        }
+        window.__shiftVoice = {
+          parse: parseVoiceCommand,
+          confirm: confirmVoiceInput,
+          getState: () => JSON.parse(JSON.stringify(state)),
+        };
+        render();
+        if ("serviceWorker" in navigator)
+          window.addEventListener("load", () =>
+            navigator.serviceWorker.register("./sw.js").catch(() => {}),
+          );
+      })();
+    </script>
+  </body>
+</html>
