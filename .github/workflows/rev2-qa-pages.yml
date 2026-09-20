@@ -128,11 +128,11 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 30); do
             html="$(curl -fsSL --max-time 20 "${SITE_URL}?verify=${GITHUB_SHA}" || true)"
-            if printf '%s' "$html" | grep -q 'fresh-supabase.js' && printf '%s' "$html" | grep -q 'holiday-enhancements.js' && printf '%s' "$html" | grep -q 'fl-dashboard.js'; then
+            if grep -Fq "fl-model.js?v=${GITHUB_SHA}" <<< "$html" && grep -Fq "fl-dashboard.js?v=${GITHUB_SHA}" <<< "$html" && grep -Fq 'fresh-supabase.js' <<< "$html" && grep -Fq 'holiday-enhancements.js' <<< "$html"; then
               fresh_js="$(curl -fsSL --max-time 20 "${SITE_URL}fresh-supabase.js?verify=${GITHUB_SHA}" || true)"
               holiday_js="$(curl -fsSL --max-time 20 "${SITE_URL}holiday-enhancements.js?verify=${GITHUB_SHA}" || true)"
               fl_js="$(curl -fsSL --max-time 20 "${SITE_URL}fl-dashboard.js?verify=${GITHUB_SHA}" || true)"
-              if printf '%s' "$fresh_js" | grep -q '__TSUBASA_FRESH_SUPABASE__' && printf '%s' "$holiday_js" | grep -q '山の日' && printf '%s' "$fl_js" | grep -q 'FL・改善推移' && printf '%s' "$fl_js" | grep -q '月次原価未確定' && printf '%s' "$fl_js" | grep -q '__TSUBASA_FL_DIRECT__'; then
+              if grep -Fq '__TSUBASA_FRESH_SUPABASE__' <<< "$fresh_js" && grep -Fq '山の日' <<< "$holiday_js" && grep -Fq 'FL・改善推移' <<< "$fl_js" && grep -Fq '月次原価未確定' <<< "$fl_js" && grep -Fq '__TSUBASA_FL_DIRECT__' <<< "$fl_js"; then
                 echo "Public F/L・FLR verification passed: ${SITE_URL}"
                 exit 0
               fi
@@ -162,7 +162,7 @@ jobs:
       - name: Playwright QA
         env:
           SUPABASE_ADMIN_JWT: ${{ secrets.SUPABASE_ADMIN_JWT || secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm exec playwright test --config=playwright.pages.config.ts
+        run: pnpm exec playwright test --config=playwright.pages.config.ts --workers=2
       - name: Payroll and FL browser checks
         run: pnpm exec playwright test --config=playwright.fl.config.ts
       - uses: actions/upload-artifact@v4
@@ -172,4 +172,5 @@ jobs:
           path: |
             playwright-report
             test-results/pages-rev2
+            test-results/fl
           retention-days: 30
