@@ -5,6 +5,8 @@ test('給与・FLの実データ照合と操作、既存画面回帰',async({pag
  await expect(page.locator('#fl-summary')).toContainText('給与・改善サマリー',{timeout:60000});
  await page.locator('#fl-summary button').click();
  await expect(page.locator('#fl-table tbody tr')).toHaveCount(8);
+ await page.locator('#fl-refresh').click();
+ await expect(page.locator('#fl-table tbody tr')).toHaveCount(8);
  const rows=await page.evaluate(async()=>{const w=window as any;return w.TsubasaFLModel.build(await w.rev2Api('/api/fl-inputs'));});
  expect(rows).toHaveLength(8);expect(rows.every((r:any)=>r.employee+r.parttime===r.salary)).toBe(true);
  expect(rows[7].salary).toBe(1583502);expect(rows[7].corrected).toBe(true);

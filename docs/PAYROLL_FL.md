@@ -22,3 +22,5 @@
 原価と会社負担の未確定は実績データ上の制約。UIの実装完了と原価確定を混同しない。
 
 原価資料の調査：ローカルの仕入経費整理修正版Excel、DB documents/expenses/monthly_operating_costs/bank_transactions、既存procurement-detail画面を確認。既存画面には他食材と酒類の片頁欠落の記録もある。月次全量・棚卸は確認できない。Library本体の読取ツールはこの環境にはない。
+
+同時更新の統合：先行して公開されたfl-trends.jsの旧モデルと回帰試験は保持し、ブラウザ描画はfl-dashboard.jsに一本化。旧flTrendsタブ名・#fl・openTsubasaFLは新しい画面へ接続。再取得ボタンも維持。複数showTabラッパーの重ね掛けを防止。

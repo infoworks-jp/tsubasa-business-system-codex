@@ -68,7 +68,27 @@
     const tabs=document.querySelector('.tabs'),nav=document.querySelector('header nav');
     if(nav)nav.innerHTML='<button onclick="showTab(\'executive\')">みんなのトップ</button><button onclick="showTab(\'overview\')">通常ダッシュボード</button><button onclick="showTab(\'historyAll\')">長期実績</button><button onclick="showTab(\'consultAll\')">長期コンサル</button><button onclick="showTab(\'shiftAll\')">シフト</button>';
     if(tabs){const lead=document.createElement('div');lead.style='display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 12px';lead.innerHTML='<button id="t_executive" style="background:#17365d;color:#fff" onclick="showTab(\'executive\')">みんなのトップ</button><button id="t_historyAll" onclick="showTab(\'historyAll\')">長期比較</button><button id="t_consultAll" onclick="showTab(\'consultAll\')">コンサル判断</button><button id="t_shiftAll" onclick="showTab(\'shiftAll\')">シフト作成</button>';tabs.parentNode.insertBefore(lead,tabs);const note=document.createElement('div');note.className='notice ok';note.style='margin-bottom:10px';note.innerHTML='<b>見方：</b> 最初は「みんなのトップ」を見てください。必要な時だけ長期比較・商品・時間帯・シフトへ進みます。';tabs.parentNode.insertBefore(note,tabs)}
-    if(typeof window.showTab==='function'){const original=window.showTab;window.showTab=async function(tab,options={}){state.tab=tab;executiveVersion++;document.querySelectorAll('[id^="t_"]').forEach(x=>x.classList.remove('active'));const b=document.getElementById('t_'+tab);if(b)b.classList.add('active');if(tab==='payroll')return window.TsubasaFL.render(options);if(tab==='executive')return renderExecutive();if(tab==='historyAll')return iframePage('./history.html','長期実績・4年比較','売上だけでなく、原票の客数と計算客単価も表示します。');if(tab==='consultAll')return iframePage('./consulting-history.html','長期コンサル分析','社会情勢・インバウンド・経営批評・やるべきことを確認します。');if(tab==='shiftAll')return iframePage('./shift/','シフト作成','売上ピークと深夜割増を見ながら作成します。');if(['products','abc','beer'].includes(tab)&&state?.quality?.coverage?.product_status!=='complete')return showNoProductData(tab);return original(tab)}}
+    if(typeof window.showTab==='function'){const original=window.showTab;window.showTab=async function(tab,options={}){if(tab==='flTrends')tab='payroll';state.tab=tab;executiveVersion++;document.querySelectorAll('[id^="t_"]').forEach(x=>x.classList.remove('active'));const b=document.getElementById('t_'+tab);if(b)b.classList.add('active');if(tab==='payroll')return window.TsubasaFL.render(options);if(tab==='executive')return renderExecutive();if(tab==='historyAll')return iframePage('./history.html','長期実績・4年比較','売上だけでなく、原票の客数と計算客単価も表示します。');if(tab==='consultAll')return iframePage('./consulting-history.html','長期コンサル分析','社会情勢・インバウンド・経営批評・やるべきことを確認します。');if(tab==='shiftAll')return iframePage('./shift/','シフト作成','売上ピークと深夜割増を見ながら作成します。');if(['products','abc','beer'].includes(tab)&&state?.quality?.coverage?.product_status!=='complete')return showNoProductData(tab);return original(tab)}}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',integrate);else integrate();
+})();
+
+// FL/payroll trends are a separate module; retain all existing dashboard functions.
+(function () {
+  const base = document.currentScript ? document.currentScript.src : location.href;
+  function loadFLTrends() {
+    if (!document.getElementById('host') || document.getElementById('flTrendsScript')) return;
+    const script = document.createElement('script');
+    script.id = 'flTrendsScript';
+    script.src = new URL('./fl-trends.js?v=20260920-fl-1', base).href;
+    script.onerror = function () {
+      const note = document.createElement('div');
+      note.className = 'notice ng';
+      note.textContent = 'FL・改善推移の画面モジュールを取得できませんでした。給与が0円という意味ではありません。再読み込みしてください。';
+      document.getElementById('host').before(note);
+    };
+    document.head.appendChild(script);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadFLTrends, {once: true});
+  else loadFLTrends();
 })();

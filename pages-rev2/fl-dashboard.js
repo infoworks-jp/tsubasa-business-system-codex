@@ -41,7 +41,7 @@
       const selectMonths=[...new Set([...months,ui.start,ui.end].filter(Boolean))].sort();
       const opts=val=>selectMonths.map(m=>`<option value="${m}" ${m===val?'selected':''}>${m}</option>`).join('');
       const rows=selected(all),a=M.aggregate(rows);
-      host.innerHTML=`<div id="fl-dashboard" class="panel"><div class="fl-title"><div><h2>FL・改善推移</h2><p>給与原票の支給計（非課税交通費を含む・控除前）。会社負担分は別途確認します。</p></div><button id="fl-back">みんなのトップへ戻る</button></div>
+      host.innerHTML=`<div id="fl-dashboard" class="panel"><div class="fl-title"><div><h2>FL・改善推移</h2><p>給与原票の支給計（非課税交通費を含む・控除前）。会社負担分は別途確認します。</p></div><button id="fl-refresh">最新データを再取得</button><button id="fl-back">みんなのトップへ戻る</button></div>
       <div class="toolbar fl-controls"><label>売上系列<select id="fl-series"><option value="historical">長期原票</option><option value="ticket">券売機</option></select></label><label>Lの範囲<select id="fl-basis"><option value="salary">給与支給額ベース</option><option value="total">会社負担を含む総人件費</option></select></label><label>期間<select id="fl-mode"><option value="all">全期間</option><option value="range">選択期間</option><option value="single">単月</option></select></label><label>開始月<select id="fl-start">${opts(ui.start)}</select></label><label>終了月<select id="fl-end">${opts(ui.end)}</select></label></div>
       <p id="fl-context">${seriesLabel()} ／ ${ui.basis==='salary'?'給与支給額ベース':'総人件費ベース（会社負担分未確認）'} ／ ${rows.length?rows[0].month+'〜'+rows.at(-1).month:'対象給与なし'}</p>
       <div class="cards" id="fl-totals">${[['給与支給額 累計',yen(a.salary)],['同系列売上 累計',yen(a.sales)],['L率（費用合計÷売上合計）',pct(a.lRate)],['F率',pct(a.fRate)],['FL率',pct(a.flRate)]].map(([l,v])=>`<div class="card"><div class="label">${l}</div><div class="big">${v}</div></div>`).join('')}</div>
@@ -59,6 +59,7 @@
       document.getElementById('fl-end').disabled=ui.mode==='single';
       const sort=document.getElementById('fl-sort'),dir=document.getElementById('fl-direction');sort.value=ui.key;dir.value=String(ui.dir);
       sort.onchange=()=>{ui.key=sort.value;draw();};dir.onchange=()=>{ui.dir=Number(dir.value);draw();};
+      document.getElementById('fl-refresh').onclick=async()=>{await window.rev2Api('/api/fl-refresh');render();};
       document.getElementById('fl-back').onclick=()=>window.showTab('executive');draw();
     }catch(e){if(token===generation&&state.tab==='payroll')host.innerHTML='<div class="notice ng">給与・FLの取得に失敗しました。再度タブを開いてください。</div>';console.error(e);}
   }
@@ -69,6 +70,7 @@
     container.innerHTML=`<h2>給与・改善サマリー</h2><p>上部と同じ対象：${scope==='all'?'累計（給与登録月のみ）':esc(scope)} ／ 給与支給額 ${shown.length?yen(a.salary):'未登録'} ／ 長期原票の給与率 ${pct(a.lRate)}</p><p>${esc(text)}</p><p>F・FLは月次原価未確定。会社負担分は未確認。</p><button type="button">FL・改善推移で1〜8月を見る</button>`;
     container.querySelector('button').onclick=()=>{ui.mode='all';window.showTab('payroll');};
   }
+  window.openTsubasaFL=()=>window.showTab('payroll');
   window.TsubasaFL={render,summary};
   window.__TSUBASA_FL_DIRECT__='2026-09-20-payroll-trends';
 })();

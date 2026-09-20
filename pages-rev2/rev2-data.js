@@ -391,6 +391,7 @@
   }
 
   window.rev2Api = async function rev2Api(url) {
+    if (url === "/api/fl-refresh") {cache = undefined; aggregate = undefined; return true;}
     const value = await data();
     if (url === "/api/bootstrap") {
       const months = [...new Set([...value.months, ...value.source.payroll.map(r => monthOf(r.payroll_month))])].sort();
