@@ -393,8 +393,30 @@
   window.rev2Api = async function rev2Api(url) {
     const value = await data();
     if (url === "/api/bootstrap") {
-      return { months: value.months, active_month: value.months.at(-1), overview: value.overview(value.months.at(-1)) };
+      const months = [...new Set([...value.months, ...value.source.payroll.map(r => monthOf(r.payroll_month))])].sort();
+      return { months, active_month: value.months.at(-1), overview: value.overview(value.months.at(-1)) };
     }
+    if (url === "/api/fl-inputs") return clone({
+      payroll: value.source.payroll.map(r => ({
+        month: monthOf(r.payroll_month), employee: number(r.employee_gross),
+        parttime: number(r.parttime_gross), salary: number(r.gross_pay),
+        // No verified employer-only source exists yet. Keep raw payments separate.
+        employer: null, employerRecorded: number(r.employer_cost),
+        corrected: String(r.status).includes('重複修正済み')
+      })),
+      historical: value.source.historical_monthly_performance.map(r => ({
+        month: monthOf(r.month_start), sales: number(r.sales_total),
+        source: `${r.source_file} p${r.source_page}`, verified: r.verification_status === 'verified_from_original'
+      })),
+      ticket: value.source.monthly_summary.filter(r => r.is_canonical && r.status === 'confirmed').map(r => ({
+        month: monthOf(r.month_start), sales: number(r.sales_total), source: r.source
+      })),
+      purchases: value.source.expenses.filter(r => r.is_canonical === true && r.status === 'confirmed'
+        && /^invoice-/.test(r.source_key) && /^(麺仕入|餃子仕入|食材仕入|飲料仕入|酒類仕入)$/.test(r.category))
+        .map(r => ({key: r.source_key, month: monthOf(r.expense_date), amount: number(r.amount), source: r.source_reference})),
+      rent: value.source.monthly_operating_costs.filter(r => r.cost_type === 'rent' && r.verification_status === 'confirmed')
+        .map(r => ({month: monthOf(r.month_start), amount: number(r.amount)}))
+    });
     if (url === "/api/monthly") return clone(value.monthly());
     if (url === "/api/historical-monthly") {
       return clone(value.source.historical_monthly_performance
@@ -437,13 +459,14 @@
       employee_gross: number(row.employee_gross),
       parttime_gross: number(row.parttime_gross),
       salary_paid: number(row.gross_pay),
-      social_insurance: number(row.employer_cost),
-      total_labor: number(row.gross_pay) + (number(row.employer_cost) || 0),
-      total_labor_rate: row.monthly_sales ? (number(row.gross_pay) + (number(row.employer_cost) || 0)) / number(row.monthly_sales) : null,
+      social_insurance: null,
+      unverified_social_payment: number(row.employer_cost),
+      total_labor: null,
+      total_labor_rate: null,
       labor_cost_rate: number(row.labor_cost_rate),
       sales_minus_labor: number(row.sales_minus_labor),
-      sales_minus_total_labor: row.monthly_sales ? number(row.monthly_sales) - number(row.gross_pay) - (number(row.employer_cost) || 0) : null,
-      status: row.status
+      sales_minus_total_labor: null,
+      status: '給与支給額。会社負担分は未確認。売上系列は月により異なるためFL・改善推移で比較してください。'
     })));
     const match = url.match(/^\/api\/(overview|daily|products|hourly|bank|quality)\/(all|\d{4}-\d{2})$/);
     if (!match) throw new Error(`未対応のデータ参照: ${url}`);

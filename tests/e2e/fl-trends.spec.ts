@@ -1,0 +1,43 @@
+import {expect,test} from '@playwright/test';
+test('給与・FLの実データ照合と操作、既存画面回帰',async({page},info)=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(process.env.FL_URL||'http://127.0.0.1:4173');
+ await expect(page.locator('#fl-summary')).toContainText('給与・改善サマリー',{timeout:60000});
+ await page.locator('#fl-summary button').click();
+ await expect(page.locator('#fl-table tbody tr')).toHaveCount(8);
+ const rows=await page.evaluate(async()=>{const w=window as any;return w.TsubasaFLModel.build(await w.rev2Api('/api/fl-inputs'));});
+ expect(rows).toHaveLength(8);expect(rows.every((r:any)=>r.employee+r.parttime===r.salary)).toBe(true);
+ expect(rows[7].salary).toBe(1583502);expect(rows[7].corrected).toBe(true);
+ await expect(page.locator('#fl-table')).toContainText('重複修正済み');
+ expect(rows.every((r:any)=>!('name' in r)&&!('employee_name' in r))).toBe(true);
+ await expect(page.locator('#fl-narrative')).toContainText('63,183円減少');
+ await expect(page.locator('#fl-dashboard')).toContainText('月次原価未確定');
+ await page.screenshot({path:info.outputPath('fl-all.png'),fullPage:true});
+ await page.selectOption('#fl-series','ticket');
+ await expect(page.locator('#fl-table tr[data-month="2026-01"]')).toContainText('月次確定売上なし');
+ await expect(page.locator('#fl-narrative')).toContainText('改善幅は算出しません');
+ await page.selectOption('#fl-start','2026-06');await page.selectOption('#fl-end','2026-08');
+ await expect(page.locator('#fl-table tbody tr')).toHaveCount(3);
+ const total=rows.slice(5).reduce((s:number,r:any)=>s+r.salary,0)/(4995250+4917050+5050830);
+ await expect(page.locator('#fl-totals')).toContainText((total*100).toFixed(2)+'%');
+ await page.selectOption('#fl-sort','salary');await page.selectOption('#fl-direction','-1');
+ await expect(page.locator('#fl-table tbody tr').first()).toHaveAttribute('data-month','2026-06');
+ await page.selectOption('#fl-basis','total');await expect(page.locator('#fl-totals')).toContainText('未確定');
+ const api=await page.evaluate(async()=>await (window as any).rev2Api('/api/payroll'));
+ expect(api.every((r:any)=>r.total_labor===null&&r.total_labor_rate===null)).toBe(true);
+ await page.selectOption('#monthSelect','2026-01');await expect(page.locator('#fl-table tbody tr')).toHaveCount(1);
+ await expect(page.locator('#fl-table tbody tr')).toHaveAttribute('data-month','2026-01');
+ await page.selectOption('#monthSelect','2026-09');await expect(page.locator('#fl-narrative')).toContainText('給与は未登録');
+ await page.selectOption('#fl-mode','all');await expect(page.locator('#fl-table tbody tr')).toHaveCount(8);
+ await page.locator('#fl-back').click();await expect(page.locator('#fl-summary')).toContainText('2026-09');
+ await page.selectOption('#monthSelect','2026-06');await expect(page.locator('#fl-summary')).toContainText('対象：2026-06');
+ for(const tab of ['overview','monthly','products','bank']){await page.locator('#t_'+tab).click();await expect(page.locator('#host')).not.toContainText('読み込み中');await expect(page.locator('#host')).not.toBeEmpty();}
+ await page.locator('#t_shiftAll').click();await expect(page.locator('#host iframe')).toHaveAttribute('src',/shift/);
+ await expect(page.frameLocator('#host iframe').locator('#tbl')).toBeVisible();
+ // A delayed executive fetch must not overwrite a later payroll navigation.
+ await page.evaluate(()=>{(window as any).showTab('executive');(window as any).showTab('payroll');});
+ await expect(page.locator('#fl-dashboard')).toBeVisible();
+ await page.waitForTimeout(500);await expect(page.locator('#fl-dashboard')).toBeVisible();
+ expect(errors).toEqual([]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
+});

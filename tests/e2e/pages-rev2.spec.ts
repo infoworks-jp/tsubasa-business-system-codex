@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const tabs = [
   ['overview', '概要'], ['monthly', '月別'], ['management', '月別経営分析'],
-  ['payroll', '人件費'], ['consulting', '経営コンサル'], ['daily', '日別'],
+  ['payroll', 'FL・改善推移'], ['consulting', '経営コンサル'], ['daily', '日別'],
   ['weekday', '曜日別'], ['products', '商品別・全商品'], ['abc', 'ABC分析'],
   ['beer', 'ビール・セット'], ['hourly', '時間帯'], ['bank', '売上入金照合'],
   ['expenses', '仕入・外注・経費'], ['quality', '品質検証']
@@ -42,9 +42,9 @@ test('主要画面の名称・順番とDB連動数字', async ({ page }) => {
         rev2Api: (url: string) => Promise<{ month_sales: number }>;
       }).rev2Api(`/api/overview/${scope}`);
     }, month);
-    expect(overview.month_sales).toBeGreaterThan(0);
+    expect(overview.month_sales).toBeGreaterThanOrEqual(0);
     await page.selectOption('#monthSelect', month);
-    await expect(page.locator('#cards')).toContainText(`¥${overview.month_sales.toLocaleString('ja-JP')}`);
+    await expect(page.locator('#cards')).toContainText(overview.month_sales===0?'券売機未登録':`¥${overview.month_sales.toLocaleString('ja-JP')}`);
   }
 
   const allOverview = await page.evaluate(async () => {
@@ -85,7 +85,7 @@ test('商品・時間帯復元と給与未確定データを0円扱いしない'
   await expect(page.locator('#integrity')).toContainText('27営業日分');
   await page.locator('#t_payroll').click({ force: true });
   await expect(page.locator('#host')).toContainText('¥314,440');
-  await expect(page.locator('#host')).toContainText('¥1,961,125');
+  await expect(page.locator('#host')).toContainText('会社負担分未確認');
   await page.selectOption('#monthSelect', '2026-08');
   await expect(page.locator('#host')).toContainText('未確定');
 });
@@ -153,7 +153,7 @@ test('公開後に判明した6月欠落を再発させない', async ({ page })
   await page.locator('#t_payroll').click();
   await expect(page.locator('#host')).toContainText('社会保険料');
   await expect(page.locator('#host')).toContainText('¥314,440');
-  await expect(page.locator('#host')).toContainText('¥2,028,986');
+  await expect(page.locator('#host')).toContainText('会社負担分未確認');
 
   await page.locator('#t_expenses').click({ force: true });
   await expect(page.locator('#host')).toContainText('仕入・外注支払');
