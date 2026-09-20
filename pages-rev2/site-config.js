@@ -68,3 +68,23 @@
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',integrate);else integrate();
 })();
+
+// FL/payroll trends are a separate module; retain all existing dashboard functions.
+(function () {
+  const base = document.currentScript ? document.currentScript.src : location.href;
+  function loadFLTrends() {
+    if (!document.getElementById('host') || document.getElementById('flTrendsScript')) return;
+    const script = document.createElement('script');
+    script.id = 'flTrendsScript';
+    script.src = new URL('./fl-trends.js?v=20260920-fl-1', base).href;
+    script.onerror = function () {
+      const note = document.createElement('div');
+      note.className = 'notice ng';
+      note.textContent = 'FL・改善推移の画面モジュールを取得できませんでした。給与が0円という意味ではありません。再読み込みしてください。';
+      document.getElementById('host').before(note);
+    };
+    document.head.appendChild(script);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadFLTrends, {once: true});
+  else loadFLTrends();
+})();
