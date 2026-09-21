@@ -393,6 +393,9 @@
   window.rev2Api = async function rev2Api(url) {
     if (url === "/api/fl-refresh") {cache = undefined; aggregate = undefined; return true;}
     const value = await data();
+    const insurance = row => window.TsubasaFLModel.reconcileInsurance(monthOf(row.payroll_month),
+      row.social_insurance_reconciliation, value.source.bank_transactions,
+      value.source.payroll.map(r => r.social_insurance_reconciliation));
     if (url === "/api/bootstrap") {
       const months = [...new Set([...value.months, ...value.source.payroll.map(r => monthOf(r.payroll_month))])].sort();
       return { months, active_month: value.months.at(-1), overview: value.overview(value.months.at(-1)) };
@@ -401,10 +404,16 @@
       payroll: value.source.payroll.map(r => ({
         month: monthOf(r.payroll_month), employee: number(r.employee_gross),
         parttime: number(r.parttime_gross), salary: number(r.gross_pay),
-        // No verified employer-only source exists yet. Keep raw payments separate.
-        employer: null, employerRecorded: number(r.employer_cost),
+        employer: insurance(r).employer, insurance: insurance(r), totalEmployer: null,
+        employerRecorded: number(r.social_insurance_reconciliation ? r.social_insurance_reconciliation.legacy_recorded_payment : r.employer_cost),
         corrected: String(r.status).includes('重複修正済み')
       })),
+      insuranceEvents: value.source.bank_transactions.filter(r =>
+        /社保料返金|労働保険/.test(r.handwritten_note || '')).map(r => ({
+          date:r.transaction_date, amount:number(r.deposit_amount)>0?number(r.deposit_amount):number(r.withdrawal_amount),
+          kind:number(r.deposit_amount)>0?'社会保険返金':'労働保険納付',source:r.source_reference,
+          status:'対象期間・会社負担への配分未確認。月次Lへ未算入。'
+        })),
       historical: value.source.historical_monthly_performance.map(r => ({
         month: monthOf(r.month_start), sales: number(r.sales_total),
         source: `${r.source_file} p${r.source_page}`, verified: r.verification_status === 'verified_from_original'
@@ -460,14 +469,17 @@
       employee_gross: number(row.employee_gross),
       parttime_gross: number(row.parttime_gross),
       salary_paid: number(row.gross_pay),
-      social_insurance: null,
-      unverified_social_payment: number(row.employer_cost),
+      social_insurance: insurance(row).employer,
+      social_insurance_basis: '納付総額−従業員の社会保険・厚生年金控除（調整前・労働保険別）',
+      salary_plus_social: insurance(row).employer==null?null:number(row.gross_pay)+insurance(row).employer,
+      insurance_reconciliation: insurance(row),
+      unverified_social_payment: insurance(row).employer==null?number(row.social_insurance_reconciliation?.legacy_recorded_payment ?? row.employer_cost):null,
       total_labor: null,
       total_labor_rate: null,
       labor_cost_rate: number(row.labor_cost_rate),
       sales_minus_labor: number(row.sales_minus_labor),
       sales_minus_total_labor: null,
-      status: '給与支給額。会社負担分は未確認。売上系列は月により異なるためFL・改善推移で比較してください。'
+      status: '給与支給額と社会保険差引額を分離。返金・労働保険の配分は未確認。売上系列は月により異なるためFL・改善推移で比較してください。'
     })));
     const match = url.match(/^\/api\/(overview|daily|products|hourly|bank|quality)\/(all|\d{4}-\d{2})$/);
     if (!match) throw new Error(`未対応のデータ参照: ${url}`);

@@ -84,8 +84,7 @@ test('商品・時間帯復元と給与未確定データを0円扱いしない'
   await page.locator('#t_hourly').click({ force: true });
   await expect(page.locator('#integrity')).toContainText('27営業日分');
   await page.locator('#t_payroll').click({ force: true });
-  await expect(page.locator('#host')).toContainText('¥314,440');
-  await expect(page.locator('#host')).toContainText('会社負担分未確認');
+  await expect(page.locator('#fl-table tr[data-month="2026-07"]')).toContainText('会社負担分未確認');
   await page.selectOption('#monthSelect', '2026-08');
   await expect(page.locator('#host')).toContainText('未確定');
 });
@@ -153,7 +152,8 @@ test('公開後に判明した6月欠落を再発させない', async ({ page })
   await page.locator('#t_payroll').click();
   await expect(page.locator('#host')).toContainText('社会保険料');
   await expect(page.locator('#host')).toContainText('¥314,440');
-  await expect(page.locator('#host')).toContainText('会社負担分未確認');
+  await expect(page.locator('#fl-table tr[data-month="2026-06"]')).toContainText('¥188,934');
+  await expect(page.locator('#fl-insurance')).toContainText('2026-07-30');
 
   await page.locator('#t_expenses').click({ force: true });
   await expect(page.locator('#host')).toContainText('仕入・外注支払');

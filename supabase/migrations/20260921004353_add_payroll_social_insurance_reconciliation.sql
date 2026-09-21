@@ -1,0 +1,2 @@
+alter table rev2.payroll add column social_insurance_reconciliation jsonb check (social_insurance_reconciliation is null or jsonb_typeof(social_insurance_reconciliation) = 'object');
+comment on column rev2.payroll.social_insurance_reconciliation is 'Monthly aggregate payroll deductions, matched insurance payment and evidence. No personal payroll data. Difference basis before unallocated refunds; employment/workers compensation costs are separate.';
