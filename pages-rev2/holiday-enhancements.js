@@ -1,6 +1,7 @@
 // Tsubasa 3 enhancement loader: category drill-down + dashboard quick tabs / 2026-08-17
 // F/L display is owned exclusively by fl-dashboard.js to avoid duplicate panels.
 // Compatibility markers for Pages QA: 2026-08-11 山の日 WEEKDAYS compactDate
+// Payroll/profit consulting snapshot added 2026-09-23; existing data and reports retained.
 (function () {
   "use strict";
   function loadBase() {
@@ -29,8 +30,34 @@
     if (expensesTab) { expensesTab.insertAdjacentElement("afterend", procurement); procurement.insertAdjacentElement("afterend", weekdayDaypart); }
     else { tabs.appendChild(procurement); tabs.appendChild(weekdayDaypart); }
   }
+  function installSalaryProfitEntry() {
+    const tabs = document.querySelector(".tabs");
+    if (!tabs || document.getElementById("t_salary_profit")) return;
+    const button = document.createElement("button");
+    button.id = "t_salary_profit";
+    button.textContent = "給与と利益";
+    button.title = "2026年9月23日確認：1〜8月の給与減少と利益への影響";
+    button.onclick = () => { window.location.href = "./consulting-payroll-20260923.html"; };
+    const anchor = document.getElementById("t_consulting");
+    if (anchor) anchor.insertAdjacentElement("afterend", button);
+    else tabs.appendChild(button);
+  }
+  function installSalaryProfitConsulting() {
+    const previous = window.renderConsulting;
+    if (typeof previous !== "function" || previous.__salaryProfit20260923) return;
+    const enhanced = async function () {
+      const result = await previous.apply(this, arguments);
+      const host = document.getElementById("host");
+      if (!host || typeof state === "undefined" || state.tab !== "consulting" || document.getElementById("salary-profit-20260923")) return result;
+      host.insertAdjacentHTML("afterbegin", `<section id="salary-profit-20260923" class="panel" style="margin-bottom:16px;border-left:6px solid #4472c4"><div class="sub">2026年9月23日確認｜1〜8月・給与と利益の固定時点分析（選択月とは別）</div><h2>給与は月84.2万円減。次は「残った利益」の確定へ。</h2><p>1月242万5,071円 → 8月158万3,502円（34.7％減）。8月は重複修正後の給与を採用しています。</p><div class="cards"><div class="card"><div>1月→8月の給与減少</div><div class="big">84万1,569円減</div></div><div class="card"><div>8月の給与率・券売機基準</div><div class="big">31.4％</div><div class="sub">会社負担保険料は別</div></div><div class="card"><div>7月→8月の売上−給与の増加</div><div class="big">19万6,963円増</div><div class="sub">券売機基準。利益増の確定額ではありません</div></div></div><p class="notice">食材原価・会社負担保険料・その他経費が未確定のため、営業利益と返済後の手残りは未確定。長期売上原票と券売機売上は混ぜず、6月比較で結論が逆になる点も明記しています。</p><a class="primary" style="display:inline-block;padding:10px 14px;border-radius:7px;text-decoration:none" href="./consulting-payroll-20260923.html">給与推移・利益への影響・次の一手を見る</a></section>`);
+      return result;
+    };
+    enhanced.__salaryProfit20260923 = true;
+    window.renderConsulting = enhanced;
+  }
   function installCategoryEnhancements() {
     installDashboardQuickTabs();
+    installSalaryProfitConsulting();
     const categoryOf = function detailCategoryEnhanced(name, base) {
       const n=String(name||"");
       if(/つばさラーメン/.test(n))return"つばさラーメン";
@@ -48,9 +75,10 @@
     window.detailCategory=categoryOf;
     document.getElementById("flTrendPanel")?.remove();
     const style=document.createElement("style");
-    style.textContent=`#t_procurement_detail,#t_weekday_daypart{font-weight:800}`;
+    style.textContent=`#t_procurement_detail,#t_weekday_daypart,#t_salary_profit{font-weight:800}`;
     document.head.appendChild(style);
     if(typeof window.reloadCurrent==="function")window.reloadCurrent();
   }
+  installSalaryProfitEntry();
   loadBase().then(installCategoryEnhancements).catch(error=>console.error("つばさ3拡張の読み込みに失敗しました",error));
 })();
