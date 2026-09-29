@@ -8,7 +8,30 @@ const tabs = [
   ['expenses', '仕入・外注・経費'], ['quality', '品質検証']
 ] as const;
 
+// Each worker reads a fresh server response once per request shape. Keep snapshots
+// only in memory for this test run, not in the repository or uploaded artifacts.
+const qaReads = new Map<string, Promise<{status: number; headers: Record<string, string>; body: Buffer}>>();
 test.beforeEach(async ({ page }) => {
+  await page.route('https://spyopczqtxypqjbhylzf.supabase.co/rest/v1/**', async route => {
+    const request = route.request();
+    if (request.method() !== 'GET') return route.continue();
+    const headers = request.headers();
+    const key = JSON.stringify([request.url(), headers.apikey, headers.authorization, headers['accept-profile'], headers.range]);
+    if (!qaReads.has(key)) {
+      qaReads.set(key, (async () => {
+        const response = await route.fetch();
+        const body = await response.body();
+        const responseHeaders = {...response.headers()};
+        delete responseHeaders['content-encoding'];
+        delete responseHeaders['content-length'];
+        const result = {status: response.status(), headers: responseHeaders, body};
+        await response.dispose();
+        if (result.status < 200 || result.status >= 300) qaReads.delete(key);
+        return result;
+      })().catch(error => {qaReads.delete(key); throw error;}));
+    }
+    await route.fulfill(await qaReads.get(key)!);
+  });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#updated')).toContainText('データ更新');
 });

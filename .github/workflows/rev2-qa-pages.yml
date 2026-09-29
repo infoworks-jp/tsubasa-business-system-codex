@@ -10,6 +10,7 @@ on:
       - 'tests/e2e/pages-rev2.spec.ts'
       - 'tests/e2e/fl-trends.spec.ts'
       - 'tests/fl-model.test.cjs'
+      - 'tests/rev2-egress.test.cjs'
       - 'playwright.fl.config.ts'
       - 'playwright.pages.config.ts'
       - '.github/workflows/rev2-qa-pages.yml'
@@ -85,7 +86,7 @@ jobs:
           node --check pages-rev2/holiday-enhancements.js
           node --check pages-rev2/fl-dashboard.js
           node --check pages-rev2/fl-model.js
-          node --test tests/fl-model.test.cjs
+          node --test tests/fl-model.test.cjs tests/rev2-egress.test.cjs
           node --check pages-rev2/fresh-supabase.js
           node --check pages-rev2/site-config.js
           grep -q 'site-config.js' pages-rev2/index.html

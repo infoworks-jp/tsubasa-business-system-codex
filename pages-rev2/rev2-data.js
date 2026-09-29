@@ -11,6 +11,25 @@
     "historical_monthly_performance", "monthly_operating_costs"
   ];
   let cache;
+  // Keep one consistent, short-lived snapshot in this tab only. Never use localStorage.
+  const SNAPSHOT_TTL = 10 * 60 * 1000;
+  const SNAPSHOT_KEY = `tsubasa-rev2-read-v1:${SUPABASE_URL}:${config.schema}`;
+  const COLUMNS = {
+    journal_products: "id,daily_journal_id,product_id,quantity,sales_amount,unit_price,issued_count,settlement_count",
+    journal_hours: "id,daily_journal_id,hour_start,quantity,sales_amount"
+  };
+  function forgetSnapshot() {
+    try { window.sessionStorage.removeItem(SNAPSHOT_KEY); } catch (_) { /* storage may be disabled */ }
+  }
+  function readSnapshot() {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(SNAPSHOT_KEY));
+      if (saved && Number.isFinite(saved.at) && Date.now() >= saved.at && Date.now() - saved.at < SNAPSHOT_TTL
+          && TABLES.every(table => Array.isArray(saved.source?.[table]))) return saved;
+    } catch (_) { /* invalid or unavailable storage: fetch fresh data */ }
+    forgetSnapshot();
+    return null;
+  }
 
   const number = (value) => value == null ? null : Number(value);
   const monthOf = (value) => String(value || "").slice(0, 7);
@@ -18,9 +37,9 @@
 
   async function select(table) {
     const rows = [];
-    const pageSize = 100;
+    const pageSize = 1000;
     for (let start = 0; ; start += pageSize) {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${COLUMNS[table] || "*"}&order=${table === "daily_journal" ? "business_date.asc" : table === "monthly_summary" ? "month_start.asc" : table === "payroll" ? "payroll_month.asc" : table === "historical_monthly_performance" ? "month_start.asc" : "id.asc"}`, {
         headers: {
           apikey: PUBLISHABLE_KEY,
           Authorization: `Bearer ${PUBLISHABLE_KEY}`,
@@ -38,12 +57,23 @@
 
   async function raw() {
     if (!cache) {
-      cache = Promise.all(TABLES.map(select)).then((sets) =>
-        Object.fromEntries(TABLES.map((table, index) => [table, sets[index]]))
-      ).catch((error) => {
-        cache = undefined;
-        throw error;
-      });
+      const saved = readSnapshot();
+      if (saved) {
+        window.rev2DataStatus = { fetchedAt: saved.at, reused: true };
+        cache = Promise.resolve(saved.source);
+      } else {
+        cache = Promise.all(TABLES.map(select)).then((sets) => {
+          const source = Object.fromEntries(TABLES.map((table, index) => [table, sets[index]]));
+          const at = Date.now();
+          try { window.sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ at, source })); }
+          catch (_) { forgetSnapshot(); }
+          window.rev2DataStatus = { fetchedAt: at, reused: false };
+          return source;
+        }).catch((error) => {
+          cache = undefined;
+          throw error;
+        });
+      }
     }
     return cache;
   }
@@ -391,7 +421,7 @@
   }
 
   window.rev2Api = async function rev2Api(url) {
-    if (url === "/api/fl-refresh") {cache = undefined; aggregate = undefined; return true;}
+    if (url === "/api/fl-refresh") {forgetSnapshot(); cache = undefined; aggregate = undefined; return true;}
     const value = await data();
     const insurance = row => window.TsubasaFLModel.reconcileInsurance(monthOf(row.payroll_month),
       row.social_insurance_reconciliation, value.source.bank_transactions,
