@@ -31,4 +31,23 @@
   };
 
   window.__TSUBASA_FRESH_SUPABASE__ = true;
+
+  // Load the read-only sales explorer without changing the existing dashboard,
+  // historical tables, FL calculations, or underlying accounting records.
+  const explorerUrl = new URL("./sales-trends.js?v=20261005-sales-v1", document.currentScript.src).href;
+  function loadSalesExplorer() {
+    if (!document.getElementById("host") || document.getElementById("sales-trends-module")) return;
+    const script = document.createElement("script");
+    script.id = "sales-trends-module";
+    script.src = explorerUrl;
+    script.onerror = function () {
+      const note = document.createElement("div");
+      note.className = "notice";
+      note.textContent = "月別・年別売上グラフを読み込めませんでした。ページを再読み込みしてください。既存画面は引き続き利用できます。";
+      document.querySelector("main")?.prepend(note);
+    };
+    document.body.appendChild(script);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadSalesExplorer, { once: true });
+  else loadSalesExplorer();
 })();
