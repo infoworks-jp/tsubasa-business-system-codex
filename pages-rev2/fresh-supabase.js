@@ -48,6 +48,14 @@
     };
     document.body.appendChild(script);
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadSalesExplorer, { once: true });
-  else loadSalesExplorer();
+  // Existing FL also wraps showTab asynchronously: install this module afterwards.
+  function afterExistingModules() {
+    const fl = document.getElementById("flTrendsScript");
+    if (fl && !window.__tsubasaFLInstalled) {
+      fl.addEventListener("load", loadSalesExplorer, { once: true });
+      fl.addEventListener("error", loadSalesExplorer, { once: true });
+    } else loadSalesExplorer();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", afterExistingModules, { once: true });
+  else afterExistingModules();
 })();
