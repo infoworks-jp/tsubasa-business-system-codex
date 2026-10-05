@@ -1,0 +1,19 @@
+// Run: node --test tests/executive-same-month.test.cjs
+const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const path=require('node:path');
+const filename=path.join(__dirname,'../pages-rev2/site-config.js');
+const ctx={window:{fetch:async()=>{}},document:{readyState:'loading',currentScript:null,addEventListener(){}},location:{href:'https://example.test/',pathname:'/'},URL,console};vm.createContext(ctx);vm.runInContext(fs.readFileSync(filename,'utf8'),ctx);
+const build=(...a)=>JSON.parse(JSON.stringify(ctx.window.TsubasaExecutiveComparison.build(...a)));
+const years=['2023','2024','2025','2026'];const hist=[{month:'2023-09',sales:7365390,customers:6856},{month:'2024-09',sales:7775130,customers:6522},{month:'2025-09',sales:6272550,customers:5402}];
+const monthly=[{month:'2026-09',sales:5749740,customers:4203},{month:'2026-10',sales:335400,customers:262}];const closed=[{month_start:'2026-09-01',sales_total:5749740,customer_count:4203,is_canonical:true,status:'confirmed'}];
+test('September shows all four years and the exact verified ticket total',()=>{const r=build(hist,monthly,closed,years,'09');assert.equal(r.length,4);assert.equal(r[3].sales,5749740);assert.equal(r[3].customers,4203);assert.equal(Math.round(r[3].avg),1368);assert.equal(r[3].source,'ticket-monthly');assert.equal(r[3].label,'券売機・月次確定');assert.equal(r[3].warning,'');assert.deepEqual(r.slice(0,3).map(x=>x.sales),[7365390,7775130,6272550]);});
+test('October registered data is shown but not marked month-end final',()=>{const r=build(hist,monthly,closed,years,'10');assert.equal(r[3].sales,335400);assert.equal(r[3].source,'ticket-daily');assert.match(r[3].label,/未確定/);assert.equal(r[0].sales,null);});
+test('neither source is genuinely missing, not zero',()=>{const r=build([],[],[],years,'11');assert.ok(r.every(x=>x.sales===null&&x.customers===null&&x.avg===null));});
+test('a real zero total remains zero with no invented average',()=>{const r=build([],[{month:'2026-11',sales:0,customers:0}],[],years,'11');assert.equal(r[3].sales,0);assert.equal(r[3].customers,0);assert.equal(r[3].avg,null);});
+test('historical values are not silently overwritten or added',()=>{const r=build([{month:'2026-09',sales:6000000,customers:4500}],monthly,closed,years,'09');assert.equal(r[3].sales,6000000);assert.equal(r[3].source,'historical');});
+test('cannot mix historical sales with ticket customers',()=>{const r=build([{month:'2026-09',sales:6000000,customers:null}],monthly,closed,years,'09');assert.equal(r[3].customers,null);assert.equal(r[3].avg,null);});
+test('month finalization survives missing daily response',()=>{const r=build(hist,[],closed,years,'09');assert.equal(r[3].sales,5749740);assert.equal(r[3].source,'ticket-monthly');});
+test('unconfirmed or superseded monthly totals cannot be promoted to final',()=>{for(const row of [{...closed[0],status:'partial'},{...closed[0],is_canonical:false}]){const r=build(hist,monthly,[row],years,'09');assert.equal(r[3].source,'ticket-daily');}});
+test('summary vs daily mismatch stays visible',()=>{const r=build(hist,[{month:'2026-09',sales:5504520,customers:4029}],closed,years,'09');assert.equal(r[3].sales,5749740);assert.match(r[3].warning,/要確認/);});
+test('null or invalid historical amount cannot hide a ticket month',()=>{for(const sales of [null,'',undefined,'bad']){const r=build([{month:'2026-09',sales,customers:111}],monthly,closed,years,'09');assert.equal(r[3].sales,5749740);assert.equal(r[3].customers,4203);}});
+test('API snapshots are never mutated',()=>{const before=JSON.stringify({hist,monthly,closed});build(hist,monthly,closed,years,'09');assert.equal(JSON.stringify({hist,monthly,closed}),before);});
+test('no hardcoded September amount or month in production',()=>{const s=fs.readFileSync(filename,'utf8');assert.equal(s.includes('5749740'),false);assert.equal(s.includes("'2026-09'"),false);});
