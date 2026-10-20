@@ -117,7 +117,7 @@
     if (!document.getElementById('host') || document.getElementById('flTrendsScript')) return;
     const script = document.createElement('script');
     script.id = 'flTrendsScript';
-    script.src = new URL('./fl-trends.js?v=20260920-fl-1', base).href;
+    script.src = new URL('./fl-trends.js?v=20261020-fl-2', base).href;
     script.onerror = function () {
       const note = document.createElement('div');
       note.className = 'notice ng';
