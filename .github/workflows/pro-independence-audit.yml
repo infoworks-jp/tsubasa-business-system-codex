@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/verify-pro-independence.mjs'
+      - 'scripts/verify-pro-independence.test.mjs'
       - '.github/workflows/pro-independence-audit.yml'
       - 'site-manifest.json'
   schedule:
@@ -23,6 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Test recruitment audit regression cases
+        run: node --test scripts/verify-pro-independence.test.mjs
       - name: Verify public systems and dependencies
         run: node scripts/verify-pro-independence.mjs
       - name: Publish readable summary

@@ -94,20 +94,72 @@ async function checkTsubasaDatabase() {
   }
 }
 
-async function checkConfiguredLinks() {
-  const rioUrl = 'https://raw.githubusercontent.com/infoworks-jp/rio-corporate-site/main/recruit-contact.js';
-  const tsubasaUrl = 'https://raw.githubusercontent.com/infoworks-jp/tubasa-susukino-site/main/index.html';
+function hrefs(html) {
+  return [...html.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi)]
+    .map(match => match[1].replaceAll('&amp;', '&'));
+}
+
+async function checkRecruitmentLinks() {
+  const origin = 'https://rio-works.com';
+  const evidence = { origin, pages: [], external: [], issues: [] };
   try {
-    const { body } = await fetchText(rioUrl);
-    const links = ['91ce7644bf2afaab', '6342d3c5e932ba44'];
-    record('indeed_links_configured', links.every(link => body.includes(link)), {
-      source: rioUrl,
-      jobKeys: links,
-      scope: 'configuration-only; Indeed may block automated live access',
-    }, 'configuration');
+    const { body: contact } = await fetchText(`${origin}/recruit-contact.js`);
+    for (const [name, path] of [['SAPPORO', '/recruit/'], ['YOKOHAMA', '/recruit/yokohama/']]) {
+      if (!new RegExp(`const\\s+${name}\\s*=\\s*['"]${path}['"]`).test(contact)
+          || !contact.includes('${' + name + '}')) evidence.issues.push(`Missing home recruitment route: ${name}`);
+    }
+    const { body: listing } = await fetchText(`${origin}/recruit/`);
+    const listingLinks = hrefs(listing);
+    const jobs = [
+      { path: '/recruit/sapporo-entry/', region: '北海道', phone: '0113748012' },
+      { path: '/recruit/sapporo-experienced/', region: '北海道', phone: '0113748012' },
+      { path: '/recruit/yokohama/', region: '神奈川県', phone: '0459303366' },
+    ];
+    for (const job of jobs) {
+      if (!listingLinks.includes(job.path)) evidence.issues.push(`Missing listing link: ${job.path}`);
+      try {
+        const url = `${origin}${job.path}`;
+        const { response, body } = await fetchText(url);
+        const links = hrefs(body);
+        const posting = [...body.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)]
+          .map(match => JSON.parse(match[1])).find(value => value['@type'] === 'JobPosting');
+        if (!posting || posting.hiringOrganization?.name !== '株式会社吏央'
+            || posting.jobLocation?.address?.addressRegion !== job.region
+            || posting.url !== url) evidence.issues.push(`Wrong job identity/location: ${job.path}`);
+        if (posting?.validThrough && Date.parse(posting.validThrough) < Date.now()) evidence.issues.push(`Expired posting: ${job.path}`);
+        if (!links.includes(`tel:${job.phone}`)) evidence.issues.push(`Wrong/missing application phone: ${job.path}`);
+        const applyBox = body.match(/<section\b[^>]*id=["']apply["'][^>]*>([\s\S]*?)<\/section>/i)?.[1] || '';
+        const applyLinks = hrefs(applyBox);
+        const indeed = links.filter(link => link.startsWith('https://jp.indeed.com/'));
+        const unique = [...new Set(indeed)];
+        if (unique.length !== 1 || !applyLinks.includes(unique[0]) || !applyLinks.includes(`tel:${job.phone}`)) {
+          evidence.issues.push(`Missing/inconsistent application actions: ${job.path}`);
+        }
+        for (const target of unique) {
+          const parsed = new URL(target);
+          const direct = parsed.pathname === '/viewjob' && /^[a-f0-9]{16}$/.test(parsed.searchParams.get('jk') || '');
+          const search = parsed.pathname === '/jobs' && parsed.searchParams.get('q')?.includes('株式会社吏央')
+            && parsed.searchParams.get('l')?.includes(job.region);
+          if (!direct && !search) evidence.issues.push(`Invalid application URL: ${job.path}`);
+          if (direct && posting?.identifier?.value !== parsed.searchParams.get('jk')) evidence.issues.push(`Job ID differs from structured data: ${job.path}`);
+          evidence.external.push({ page: job.path, url: target, kind: direct ? 'job-detail' : 'search-results',
+            status: 'NOT_VERIFIED', note: search ? 'Search results do not guarantee arrival at an individual job; the office phone is available.' : 'External job availability requires a live check; configuration PASS is not proof of application delivery.' });
+        }
+        evidence.pages.push({ url, finalUrl: response.url, httpStatus: response.status, title: posting?.title,
+          jobIdentifier: posting?.identifier?.value, salary: posting?.baseSalary?.value, phone: job.phone });
+      } catch (error) {
+        evidence.issues.push(`${job.path}: ${String(error)}`);
+      }
+    }
   } catch (error) {
-    record('indeed_links_configured', false, { source: rioUrl, error: String(error) }, 'configuration');
+    evidence.issues.push(String(error));
   }
+  // Keep the historical check ID for report consumers, but audit the current public route graph.
+  record('indeed_links_configured', evidence.issues.length === 0, evidence, 'configuration');
+}
+
+async function checkConfiguredLinks() {
+  const tsubasaUrl = 'https://raw.githubusercontent.com/infoworks-jp/tubasa-susukino-site/main/index.html';
   try {
     const { body } = await fetchText(tsubasaUrl);
     const hasMapsLink = body.includes('https://www.google.com/maps/search/?api=1&query=');
@@ -119,6 +171,32 @@ async function checkConfiguredLinks() {
     }, 'configuration');
   } catch (error) {
     record('google_maps_link_configured', false, { source: tsubasaUrl, error: String(error) }, 'configuration');
+  }
+}
+
+async function checkExternalRecruitmentDestinations() {
+  const configured = results.find(item => item.id === 'indeed_links_configured');
+  for (const target of configured?.evidence.external || []) {
+    if (target.kind !== 'job-detail') continue;
+    try {
+      const { response, body } = await fetchText(target.url);
+      const raw = [...body.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+      const posting = raw.map(match => JSON.parse(match[1])).find(value => value['@type'] === 'JobPosting');
+      if (!posting) { target.note += ' Live response has no verifiable JobPosting data.'; continue; }
+      const expected = configured.evidence.pages.find(page => new URL(page.url).pathname === target.page);
+      const actualSalary = posting.baseSalary?.value;
+      const identityOk = posting.hiringOrganization?.name?.replace(/\s/g, '') === '株式会社吏央'
+        && posting.jobLocation?.address?.addressRegion === (target.page.includes('sapporo') ? '北海道' : '神奈川県');
+      const salaryOk = expected.salary?.minValue === actualSalary?.minValue
+        && expected.salary?.maxValue === actualSalary?.maxValue
+        && expected.salary?.unitText === actualSalary?.unitText;
+      target.status = identityOk && salaryOk ? 'PASS' : 'FAIL';
+      record(`recruitment_destination_${target.page.split('/').filter(Boolean).at(-1)}`, identityOk && salaryOk, {
+        url: target.url, httpStatus: response.status, title: posting.title,
+        employer: posting.hiringOrganization?.name, expectedSalary: expected.salary, actualSalary,
+        identityOk, salaryOk, note: 'Read-only content verification; no application was submitted.',
+      });
+    } catch (error) { target.note += ` Live verification unavailable: ${String(error)}`; }
   }
 }
 
@@ -146,7 +224,10 @@ await Promise.all([
   checkRioContact(),
   checkTsubasaDatabase(),
   checkConfiguredLinks(),
+  checkRecruitmentLinks(),
 ]);
+
+await checkExternalRecruitmentDestinations();
 
 const report = {
   schemaVersion: 1,
@@ -155,7 +236,7 @@ const report = {
   overall: results.every(result => result.status === 'PASS') ? 'PASS' : 'FAIL',
   limitations: [
     'Recruitment email delivery is not tested because that would send a real external message.',
-    'Indeed is configuration-checked only because its anti-bot layer can reject automated checks.',
+    'Indeed responses with JobPosting data are checked for employer, region and salary. Blocked/unstructured responses remain NOT_VERIFIED; search URLs do not guarantee an individual job.',
     'This verifies availability and wiring, not the semantic correctness of every business-data row.',
   ],
   results,
