@@ -248,7 +248,7 @@
           item.retention_status === "preserved" &&
           /^[0-9a-f]{64}$/.test(String(item.sha256 || "")) &&
           Number(item.byte_size) > 0 &&
-          Boolean(item.archive_uri || item.library_file_id)
+          Boolean(item.library_file_id || /^(https:\/\/|s3:\/\/|gs:\/\/|supabase:\/\/)/i.test(String(item.archive_uri || "")))
         );
         const productComparable = row.total_sales > 0 && productsForDay.length === 40
           && new Set(productsForDay.map(item => item.product_id)).size === 40;
