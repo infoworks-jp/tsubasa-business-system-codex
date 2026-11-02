@@ -13,7 +13,7 @@
   let cache;
   // Keep one consistent, short-lived snapshot in this tab only. Never use localStorage.
   const SNAPSHOT_TTL = 10 * 60 * 1000;
-  const SNAPSHOT_KEY = `tsubasa-rev2-read-v2:${SUPABASE_URL}:${config.schema}`;
+  const SNAPSHOT_KEY = `tsubasa-rev2-read-v3:${SUPABASE_URL}:${config.schema}`;
   const COLUMNS = {
     journal_products: "id,daily_journal_id,product_id,quantity,sales_amount,unit_price,issued_count,settlement_count",
     journal_hours: "id,daily_journal_id,hour_start,quantity,sales_amount"
@@ -211,6 +211,8 @@
       // Mondays without a journal remain planned closures, never invented zero sales.
       const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
       const registeredDates = new Set(rows.map(row => row.business_date));
+      const awaitingSourceSet = new Set(source.documents.filter(d => d.document_type === "receipt_delivery_status" && d.verification_status === "awaiting_source").map(d => d.business_date));
+      const awaitingSourceDates = [];
       const missingBusinessDates = [];
       const plannedClosureDates = [];
       for (const month of (scope === "all" ? months : [scope])) {
@@ -218,7 +220,7 @@
         for (let day = start; monthOf(day.toISOString()) === month; day = new Date(day.getTime() + 86400000)) {
           const date = day.toISOString().slice(0, 10);
           if (date > today || registeredDates.has(date)) continue;
-          (day.getUTCDay() === 1 ? plannedClosureDates : missingBusinessDates).push(date);
+          (awaitingSourceSet.has(date) ? awaitingSourceDates : day.getUTCDay() === 1 ? plannedClosureDates : missingBusinessDates).push(date);
         }
       }
       const unresolvedDateRows = rows.filter(row => /日付配分要確認|日別配分.*未確定|未確定・未配賦/.test(row.notes || ""));
@@ -309,7 +311,7 @@
       const missingHourlyDates = absentHourlyDates.concat(hourlyMismatchDates);
       const missingDocumentDates = operatingDetails.filter((row) => !row.document_match).map((row) => row.date);
       const missingRetainedSourceDates = operatingDetails.filter((row) => !row.retained_document_match).map((row) => row.date);
-      const matched = productComplete && hourlySafe && documentComplete && retentionComplete && pending === 0 && missingBusinessDates.length === 0 && unresolvedDateRows.length === 0;
+      const matched = productComplete && hourlySafe && documentComplete && retentionComplete && pending === 0 && missingBusinessDates.length === 0 && awaitingSourceDates.length === 0 && unresolvedDateRows.length === 0;
       const productRegisteredDays = operatingDetails.filter((row) => row.product_rows > 0).length;
       const registeredProductTotal = operatingDetails
         .filter((row) => row.product_rows > 0 && row.products !== null)
@@ -338,6 +340,7 @@
         holidays: rows.filter((row) => row.total_sales === 0 && /休/.test(row.notes || "")).length,
         pending,
         missing_business_dates: missingBusinessDates,
+        awaiting_source_dates: awaitingSourceDates,
         planned_closure_dates: plannedClosureDates,
         unresolved_date_dates: unresolvedDateRows.map(row => row.business_date),
         missing_product_dates: missingProductDates,
