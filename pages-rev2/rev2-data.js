@@ -13,7 +13,7 @@
   let cache;
   // Keep one consistent, short-lived snapshot in this tab only. Never use localStorage.
   const SNAPSHOT_TTL = 10 * 60 * 1000;
-  const SNAPSHOT_KEY = `tsubasa-rev2-read-v1:${SUPABASE_URL}:${config.schema}`;
+  const SNAPSHOT_KEY = `tsubasa-rev2-read-v2:${SUPABASE_URL}:${config.schema}`;
   const COLUMNS = {
     journal_products: "id,daily_journal_id,product_id,quantity,sales_amount,unit_price,issued_count,settlement_count",
     journal_hours: "id,daily_journal_id,hour_start,quantity,sales_amount"
@@ -207,6 +207,21 @@
 
     function quality(scope) {
       const rows = scopedDaily(scope);
+      // Missing rows must not disappear from the completeness denominator.
+      // Mondays without a journal remain planned closures, never invented zero sales.
+      const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+      const registeredDates = new Set(rows.map(row => row.business_date));
+      const missingBusinessDates = [];
+      const plannedClosureDates = [];
+      for (const month of (scope === "all" ? months : [scope])) {
+        const start = new Date(`${month}-01T00:00:00Z`);
+        for (let day = start; monthOf(day.toISOString()) === month; day = new Date(day.getTime() + 86400000)) {
+          const date = day.toISOString().slice(0, 10);
+          if (date > today || registeredDates.has(date)) continue;
+          (day.getUTCDay() === 1 ? plannedClosureDates : missingBusinessDates).push(date);
+        }
+      }
+      const unresolvedDateRows = rows.filter(row => /日付配分要確認|日別配分.*未確定|未確定・未配賦/.test(row.notes || ""));
       const dailyTotal = rows.reduce((sum, row) => sum + row.total_sales, 0);
       const operatingRows = rows.filter((row) => row.total_sales > 0);
       const documentsByDate = new Map();
@@ -235,25 +250,37 @@
           Number(item.byte_size) > 0 &&
           Boolean(item.archive_uri || item.library_file_id)
         );
-        const productComparable = row.total_sales > 0 && productsForDay.length === 40;
-        const hourlyComparable = row.total_sales > 0 && hoursForDay.length === 24;
+        const productComparable = row.total_sales > 0 && productsForDay.length === 40
+          && new Set(productsForDay.map(item => item.product_id)).size === 40;
+        const productIssued = productsForDay.reduce((sum, item) => sum + Number(item.issued_count || 0), 0);
+        const productSettled = productsForDay.reduce((sum, item) => sum + Number(item.settlement_count || 0), 0);
+        const productQuantityMatch = row.issued_count != null && row.settlement_count != null
+          && productsForDay.every(item => item.issued_count != null && item.settlement_count != null)
+          && productIssued === row.issued_count && productSettled === row.settlement_count;
+        const hourlyComparable = row.total_sales > 0 && hoursForDay.length === 24
+          && new Set(hoursForDay.map(item => item.hour_start)).size === 24;
+        // Historical imports use both signed adjustments and positive refund amounts.
+        const refund = row.settlement_amount == null ? null : Math.abs(row.settlement_amount);
+        const hourlyNet = hourlyComparable && refund != null ? hour - refund : null;
         return {
           date: row.business_date,
           daily: row.total_sales,
           products: productComparable ? product : null,
           product_diff: productComparable ? row.total_sales - product : null,
-          product_match: productComparable && row.total_sales === product,
+          product_match: productComparable && row.total_sales === product && productQuantityMatch,
+          product_quantity_match: productQuantityMatch,
           product_rows: productsForDay.length,
           hourly_gross: hourlyComparable ? hour : null,
-          settlement_adjustment: row.settlement_amount,
-          hourly_net: null,
+          settlement_adjustment: refund,
+          hourly_net: hourlyNet,
+          hourly_net_difference: hourlyNet == null ? null : hourlyNet - row.total_sales,
           hourly_difference: hourlyComparable ? hour - row.total_sales : null,
           hourly_large_difference: hourlyComparable
             ? Math.abs(hour - row.total_sales) >= Math.max(5000, row.total_sales * 0.05)
             : false,
           hourly_rows: hoursForDay.length,
           hourly_quantity: hourlyComparable ? hourQuantity : null,
-          hourly_match: hourlyComparable && hoursForDay.length === 24,
+          hourly_match: hourlyComparable && hourlyNet === row.total_sales && hourQuantity === row.issued_count,
           document_match: row.total_sales > 0 && hasDocument,
           retained_document_match: row.total_sales > 0 && hasRetainedDocument
         };
@@ -282,7 +309,7 @@
       const missingHourlyDates = absentHourlyDates.concat(hourlyMismatchDates);
       const missingDocumentDates = operatingDetails.filter((row) => !row.document_match).map((row) => row.date);
       const missingRetainedSourceDates = operatingDetails.filter((row) => !row.retained_document_match).map((row) => row.date);
-      const matched = productComplete && hourlySafe && documentComplete && retentionComplete && pending === 0;
+      const matched = productComplete && hourlySafe && documentComplete && retentionComplete && pending === 0 && missingBusinessDates.length === 0 && unresolvedDateRows.length === 0;
       const productRegisteredDays = operatingDetails.filter((row) => row.product_rows > 0).length;
       const registeredProductTotal = operatingDetails
         .filter((row) => row.product_rows > 0 && row.products !== null)
@@ -301,7 +328,7 @@
         product_breakdown_pending_total: productBreakdownPendingTotal,
         hourly: scopedHourDays ? hourTotal : null,
         settlement_adjustment: scopedHourDays ? scopedSettlementAdjustment : null,
-        hourly_net: scopedHourDays ? hourTotal - scopedSettlementAdjustment : null,
+        hourly_net: scopedHourDays && completeHourlyDetails.every(row => row.hourly_net != null) ? hourTotal - scopedSettlementAdjustment : null,
         product_match: productComplete,
         hourly_match: hourlyComplete,
         document_match: documentComplete,
@@ -310,6 +337,9 @@
         status: matched ? "確定" : "要確認",
         holidays: rows.filter((row) => row.total_sales === 0 && /休/.test(row.notes || "")).length,
         pending,
+        missing_business_dates: missingBusinessDates,
+        planned_closure_dates: plannedClosureDates,
+        unresolved_date_dates: unresolvedDateRows.map(row => row.business_date),
         missing_product_dates: missingProductDates,
         missing_hourly_dates: missingHourlyDates,
         hourly_anomaly_dates: hourlyAnomalyDates,
