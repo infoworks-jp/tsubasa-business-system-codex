@@ -42,7 +42,7 @@ test('主要画面の名称・順番とDB連動数字', async ({ page }) => {
     '給与と利益',
     ...tabs.slice(5, -1).map(([, label]) => label),
     '仕入数量・変動原価', '曜日×昼・夜・深夜',
-    tabs.at(-1)![1],
+    tabs.at(-1)![1], '月別・年別売上',
   ];
   await expect(page.locator('.tabs button[id^="t_"]')).toHaveText(expectedTabLabels);
   const months = await page.locator('#monthSelect option').evaluateAll(options =>
@@ -246,8 +246,14 @@ test('9月商品原票を全日検算し通常分析を表示する', async ({ p
 
   await page.selectOption('#monthSelect', '2026-08');
   await page.locator('#t_products').click();
-  await expect(page.locator('#host')).toContainText('26営業日中23日分の原票を登録済み');
-  await expect(page.locator('#host svg')).toHaveCount(0);
+  // Recovered original journals now cover all August operating days.
+  const august = await page.evaluate(async () => (window as typeof window & {
+    rev2Api: (url: string) => Promise<Array<{ sales: number }>>;
+  }).rev2Api('/api/products/2026-08'));
+  expect(august).toHaveLength(40);
+  expect(august.reduce((sum, row) => sum + row.sales, 0)).toBe(5050830);
+  await expect(page.locator('#host')).toContainText('全商品 40品目');
+  await expect(page.locator('#host')).not.toContainText('26営業日中23日分');
 
   await page.selectOption('#monthSelect', '2026-09');
   await page.locator('#t_hourly').click({ force: true });
@@ -267,7 +273,7 @@ test('9月商品原票を全日検算し通常分析を表示する', async ({ p
   // Journal business dates were corrected on 2026-09-25 (see AGENTS.md).
   const september3 = page.locator('#host tr').filter({ hasText: '2026-09-03' }).filter({ hasText: '¥259,410' });
   await expect(september3).toContainText('¥1,600');
-  await expect(september3).toContainText('参考差異');
+  await expect(september3).toContainText('精算後一致');
 });
 
 test('長期原票客数と2系列を混同しない', async ({ page }) => {
