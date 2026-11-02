@@ -4,15 +4,15 @@ test('給与・FLの実データ照合と操作、既存画面回帰',async({pag
  await page.goto(process.env.FL_URL||'http://127.0.0.1:4173');
  await expect(page.locator('#fl-summary')).toContainText('給与・改善サマリー',{timeout:60000});
  await page.locator('#fl-summary button').click();
- await expect(page.locator('#fl-table tbody tr')).toHaveCount(8);
+ await expect(page.locator('#fl-table tbody tr')).toHaveCount(9);
  await page.locator('#fl-refresh').click();
- await expect(page.locator('#fl-table tbody tr')).toHaveCount(8);
+ await expect(page.locator('#fl-table tbody tr')).toHaveCount(9);
  const rows=await page.evaluate(async()=>{const w=window as any;return w.TsubasaFLModel.build(await w.rev2Api('/api/fl-inputs'));});
- expect(rows).toHaveLength(8);expect(rows.every((r:any)=>r.employee+r.parttime===r.salary)).toBe(true);
+ expect(rows).toHaveLength(9);expect(rows.every((r:any)=>r.employee+r.parttime===r.salary)).toBe(true);
  expect(rows[7].salary).toBe(1583502);expect(rows[7].corrected).toBe(true);
  await expect(page.locator('#fl-table')).toContainText('重複修正済み');
  expect(rows.every((r:any)=>!('name' in r)&&!('employee_name' in r))).toBe(true);
- await expect(page.locator('#fl-narrative')).toContainText('63,183円減少');
+ await expect(page.locator('#fl-narrative')).toContainText('68,835円減少');
  await expect(page.locator('#fl-dashboard')).toContainText('月次原価未確定');
  expect(rows.filter((r:any)=>r.employer!==null).map((r:any)=>[r.month,r.employer])).toEqual([['2026-04',188934],['2026-05',188934],['2026-06',188934]]);
  expect(rows.slice(3,6).map((r:any)=>r.insurance.paymentDate)).toEqual(['2026-05-29','2026-06-30','2026-07-30']);
@@ -36,7 +36,7 @@ test('給与・FLの実データ照合と操作、既存画面回帰',async({pag
  await expect(page.locator('#fl-narrative')).toContainText('改善幅は算出しません');
  await page.selectOption('#fl-start','2026-06');await page.selectOption('#fl-end','2026-08');
  await expect(page.locator('#fl-table tbody tr')).toHaveCount(3);
- const total=rows.slice(5).reduce((s:number,r:any)=>s+r.salary,0)/(4995250+4917050+5050830);
+ const total=rows.filter((r:any)=>r.month>='2026-06'&&r.month<='2026-08').reduce((s:number,r:any)=>s+r.salary,0)/(4995250+4917050+5050830);
  await expect(page.locator('#fl-totals')).toContainText((total*100).toFixed(2)+'%');
  await page.selectOption('#fl-sort','salary');await page.selectOption('#fl-direction','-1');
  await expect(page.locator('#fl-table tbody tr').first()).toHaveAttribute('data-month','2026-06');
@@ -46,8 +46,8 @@ test('給与・FLの実データ照合と操作、既存画面回帰',async({pag
  expect(api.filter((r:any)=>r.social_insurance!==null).map((r:any)=>r.salary_plus_social)).toEqual([2183360,2057256,1903480]);
  await page.selectOption('#monthSelect','2026-01');await expect(page.locator('#fl-table tbody tr')).toHaveCount(1);
  await expect(page.locator('#fl-table tbody tr')).toHaveAttribute('data-month','2026-01');
- await page.selectOption('#monthSelect','2026-09');await expect(page.locator('#fl-narrative')).toContainText('給与は未登録');
- await page.selectOption('#fl-mode','all');await expect(page.locator('#fl-table tbody tr')).toHaveCount(8);
+ await page.selectOption('#monthSelect','2026-09');await expect(page.locator('#fl-table tr[data-month="2026-09"]')).toContainText('¥1,514,667');
+ await page.selectOption('#fl-mode','all');await expect(page.locator('#fl-table tbody tr')).toHaveCount(9);
  await page.locator('#fl-back').click();await expect(page.locator('#fl-summary')).toContainText('2026-09');
  await page.selectOption('#monthSelect','2026-06');await expect(page.locator('#fl-summary')).toContainText('対象：2026-06');
  for(const tab of ['overview','monthly','products','bank']){await page.locator('#t_'+tab).click();await expect(page.locator('#host')).not.toContainText('読み込み中');await expect(page.locator('#host')).not.toBeEmpty();}
