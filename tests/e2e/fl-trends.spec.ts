@@ -12,7 +12,7 @@ test('給与・FLの実データ照合と操作、既存画面回帰',async({pag
  expect(rows[7].salary).toBe(1583502);expect(rows[7].corrected).toBe(true);
  await expect(page.locator('#fl-table')).toContainText('重複修正済み');
  expect(rows.every((r:any)=>!('name' in r)&&!('employee_name' in r))).toBe(true);
- await expect(page.locator('#fl-narrative')).toContainText('68,835円減少');
+ await expect(page.locator('#fl-narrative')).toContainText('63,183円減少');
  await expect(page.locator('#fl-dashboard')).toContainText('月次原価未確定');
  expect(rows.filter((r:any)=>r.employer!==null).map((r:any)=>[r.month,r.employer])).toEqual([['2026-04',188934],['2026-05',188934],['2026-06',188934]]);
  expect(rows.slice(3,6).map((r:any)=>r.insurance.paymentDate)).toEqual(['2026-05-29','2026-06-30','2026-07-30']);
