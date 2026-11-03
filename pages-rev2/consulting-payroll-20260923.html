@@ -5,8 +5,8 @@
 :root{--blue:#28589c;--nav:#17365d;--green:#148778;--bg:#f2f5fa;--ink:#1f2937}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Yu Gothic","Hiragino Kaku Gothic ProN",sans-serif;color:var(--ink);line-height:1.6}
 header{background:var(--nav);color:white;padding:20px max(16px,calc((100vw - 1150px)/2))}header h1{font-size:clamp(22px,3vw,31px);margin:3px 0 14px}
-header a{display:inline-block;color:white;background:#4274c2;padding:8px 12px;border-radius:6px;text-decoration:none;margin:0 5px 5px 0}
-main{max-width:1150px;margin:0 auto;padding:16px}.panel,.card{background:white;border-radius:13px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px #d9e2ef}
+header nav{display:flex;flex-wrap:wrap;gap:8px}header a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;color:white;background:#4274c2;padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:700;border:1px solid #8ca9d7}header a:hover,header a:focus-visible{background:#6794db;outline:2px solid white;outline-offset:2px}
+main{max-width:1150px;margin:0 auto;padding:16px;min-width:0;overflow-wrap:anywhere}.panel,.card{min-width:0;overflow-wrap:anywhere}.panel,.card{background:white;border-radius:13px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px #d9e2ef}
 .hero{border-left:6px solid #4472c4}h2{color:var(--nav);font-size:clamp(19px,2.8vw,25px);line-height:1.45;margin:0 0 12px}.muted{font-size:13px;color:#536477}.lead{font-size:clamp(17px,2.5vw,21px);font-weight:750}
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.card .value{font-size:clamp(23px,3vw,32px);font-weight:800;color:var(--nav);margin:5px 0}.good{color:#166534!important}
 .chartwrap{overflow-x:auto}.chart{min-width:670px;display:grid;grid-template-columns:repeat(12,minmax(49px,1fr));gap:8px;align-items:end;height:330px;border-bottom:1px solid #bdcbe0;padding:12px 0 0}
@@ -16,7 +16,7 @@ main{max-width:1150px;margin:0 auto;padding:16px}.panel,.card{background:white;b
 .scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:700px;font-size:14px}th,td{padding:10px 9px;border-bottom:1px solid #e2e8f0;text-align:right;white-space:nowrap}th{background:var(--nav);color:white}th:first-child,td:first-child{text-align:left}tbody tr:nth-child(even){background:#f5f8fd}.note{background:#eef4fb;padding:12px;border-radius:7px}.error{background:#fff0e7;border-left:5px solid #bb521f;padding:16px}
 @media(max-width:650px){.cards{grid-template-columns:1fr}.panel,.card{padding:16px}.chart{min-width:700px}}@media print{header{background:white;color:black}header a{display:none}.panel,.card{box-shadow:none;border:1px solid #ccc}.chart{min-width:0}}
 </style></head>
-<body><header><div>味一番つばさ｜経営管理システム</div><h1>給与・売上の経営コンサル</h1><nav><a href="./">つばさ3へ戻る</a><a href="./#fl">FL・改善推移</a><a href="./consulting-history.html">長期コンサル</a></nav></header>
+<body><header><div>味一番つばさ｜経営管理システム</div><h1>給与・売上の経営コンサル</h1><nav><a target="_top" href="./index.html#executive">みんなのトップ</a><a target="_top" href="./index.html#overview">通常ダッシュボード</a><a target="_top" href="./history.html">長期実績</a><a target="_top" href="./consulting-history.html">長期コンサル</a><a target="_top" href="./index.html#shift">シフト</a><a target="_top" href="./index.html#flTrends">FL・改善推移</a></nav></header>
 <main id="main"><section class="panel"><h2>最新の給与・売上を確認しています…</h2><p>原票から登録された月次データを取得中です。</p></section></main>
 <script src="./site-config.js?v=20261020-payroll-9"></script>
 <script>
