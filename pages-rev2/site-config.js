@@ -102,6 +102,8 @@
   function integrate(){
     injectHistoryCustomerPanel();
     injectCombinedHistoryPanel();
+    // Standalone reports have their own real links. Never replace them with dashboard-only buttons.
+    if(!document.getElementById('host'))return;
     const tabs=document.querySelector('.tabs'),nav=document.querySelector('header nav');
     if(nav)nav.innerHTML='<button onclick="showTab(\'executive\')">みんなのトップ</button><button onclick="showTab(\'overview\')">通常ダッシュボード</button><button onclick="showTab(\'historyAll\')">長期実績</button><button onclick="showTab(\'consultAll\')">長期コンサル</button><button onclick="showTab(\'shiftAll\')">シフト</button>';
     if(tabs){const lead=document.createElement('div');lead.style='display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 12px';lead.innerHTML='<button id="t_executive" style="background:#17365d;color:#fff" onclick="showTab(\'executive\')">みんなのトップ</button><button id="t_historyAll" onclick="showTab(\'historyAll\')">長期比較</button><button id="t_consultAll" onclick="showTab(\'consultAll\')">コンサル判断</button><button id="t_shiftAll" onclick="showTab(\'shiftAll\')">シフト作成</button>';tabs.parentNode.insertBefore(lead,tabs);const note=document.createElement('div');note.className='notice ok';note.style='margin-bottom:10px';note.innerHTML='<b>見方：</b> 最初は「みんなのトップ」を見てください。必要な時だけ長期比較・商品・時間帯・シフトへ進みます。';tabs.parentNode.insertBefore(note,tabs)}
