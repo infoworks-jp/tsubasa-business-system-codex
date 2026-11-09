@@ -101,20 +101,41 @@ function hrefs(html) {
 
 async function checkRecruitmentLinks() {
   const origin = 'https://rio-works.com';
-  const evidence = { origin, pages: [], external: [], issues: [] };
+  const evidence = { origin, pages: [], redirects: [], external: [], issues: [] };
   try {
     const { body: contact } = await fetchText(`${origin}/recruit-contact.js`);
-    for (const [name, path] of [['SAPPORO', '/recruit/'], ['YOKOHAMA', '/recruit/yokohama/']]) {
+    for (const [name, path] of [['SAPPORO', '/recruit/sapporo/'], ['YOKOHAMA', '/recruit/yokohama/']]) {
       if (!new RegExp(`const\\s+${name}\\s*=\\s*['"]${path}['"]`).test(contact)
           || !contact.includes('${' + name + '}')) evidence.issues.push(`Missing home recruitment route: ${name}`);
     }
     const { body: listing } = await fetchText(`${origin}/recruit/`);
     const listingLinks = hrefs(listing);
     const jobs = [
-      { path: '/recruit/sapporo-entry/', region: '北海道', phone: '0113748012' },
-      { path: '/recruit/sapporo-experienced/', region: '北海道', phone: '0113748012' },
-      { path: '/recruit/yokohama/', region: '神奈川県', phone: '0459303366' },
+      { path: '/recruit/sapporo/', region: '北海道', phone: '0113748012' },
+      // Public Yokohama page uses an AirWork identifier, not an Indeed job key.
+      // Keep the explicit cross-provider association; never exempt arbitrary numeric IDs.
+      { path: '/recruit/yokohama/', region: '神奈川県', phone: '0459303366',
+        airWorkId: '6037094', indeedKey: '781dac6412229d3f' },
     ];
+    // fetch follows HTTP redirects, but not HTML meta refresh. Verify legacy
+    // aliases separately so neither broken bookmarks nor wrong-office redirects pass.
+    for (const path of ['/recruit/sapporo-entry/', '/recruit/sapporo-experienced/']) {
+      try {
+        const { response, body } = await fetchText(`${origin}${path}`);
+        const target = `${origin}/recruit/sapporo/`;
+        const tags = body.match(/<meta\b[^>]*>/gi) || [];
+        const refresh = tags.find(tag => /http-equiv=["']refresh["']/i.test(tag));
+        const content = refresh?.match(/content=["']([^"']+)["']/i)?.[1];
+        const destination = content?.match(/^\s*0\s*;\s*url\s*=\s*(.+?)\s*$/i)?.[1];
+        const canonical = (body.match(/<link\b[^>]*>/gi) || [])
+          .find(tag => /rel=["']canonical["']/i.test(tag))?.match(/href=["']([^"']+)["']/i)?.[1];
+        const ok = response.url === target || (destination && new URL(destination, origin).href === target
+          && canonical === target && hrefs(body).some(link => new URL(link, origin).href === target));
+        if (!ok) evidence.issues.push(`Wrong/missing legacy redirect: ${path}`);
+        evidence.redirects.push({ url: `${origin}${path}`, finalUrl: response.url,
+          target: destination, httpStatus: response.status, ok: Boolean(ok) });
+      } catch (error) { evidence.issues.push(`${path}: ${String(error)}`); }
+    }
     for (const job of jobs) {
       if (!listingLinks.includes(job.path)) evidence.issues.push(`Missing listing link: ${job.path}`);
       try {
@@ -126,7 +147,7 @@ async function checkRecruitmentLinks() {
         if (!posting || posting.hiringOrganization?.name !== '株式会社吏央'
             || posting.jobLocation?.address?.addressRegion !== job.region
             || posting.url !== url) evidence.issues.push(`Wrong job identity/location: ${job.path}`);
-        if (posting?.validThrough && Date.parse(posting.validThrough) < Date.now()) evidence.issues.push(`Expired posting: ${job.path}`);
+        if (posting?.validThrough && (!Number.isFinite(Date.parse(posting.validThrough)) || Date.parse(posting.validThrough) < Date.now())) evidence.issues.push(`Expired posting: ${job.path}`);
         if (!links.includes(`tel:${job.phone}`)) evidence.issues.push(`Wrong/missing application phone: ${job.path}`);
         const applyBox = body.match(/<section\b[^>]*id=["']apply["'][^>]*>([\s\S]*?)<\/section>/i)?.[1] || '';
         const applyLinks = hrefs(applyBox);
@@ -141,12 +162,19 @@ async function checkRecruitmentLinks() {
           const search = parsed.pathname === '/jobs' && parsed.searchParams.get('q')?.includes('株式会社吏央')
             && parsed.searchParams.get('l')?.includes(job.region);
           if (!direct && !search) evidence.issues.push(`Invalid application URL: ${job.path}`);
-          if (direct && posting?.identifier?.value !== parsed.searchParams.get('jk')) evidence.issues.push(`Job ID differs from structured data: ${job.path}`);
+          if (direct) {
+            const identifier = posting?.identifier?.value;
+            const key = parsed.searchParams.get('jk');
+            const matches = job.airWorkId
+              ? identifier === job.airWorkId && key === job.indeedKey
+              : identifier === key;
+            if (!matches) evidence.issues.push(`Job ID differs from configured provider association: ${job.path}`);
+          }
           evidence.external.push({ page: job.path, url: target, kind: direct ? 'job-detail' : 'search-results',
             status: 'NOT_VERIFIED', note: search ? 'Search results do not guarantee arrival at an individual job; the office phone is available.' : 'External job availability requires a live check; configuration PASS is not proof of application delivery.' });
         }
         evidence.pages.push({ url, finalUrl: response.url, httpStatus: response.status, title: posting?.title,
-          jobIdentifier: posting?.identifier?.value, salary: posting?.baseSalary?.value, phone: job.phone });
+          jobIdentifier: posting?.identifier?.value, identifierProvider: job.airWorkId ? 'AirWork' : 'Indeed', salary: posting?.baseSalary?.value, phone: job.phone });
       } catch (error) {
         evidence.issues.push(`${job.path}: ${String(error)}`);
       }
@@ -185,9 +213,13 @@ async function checkExternalRecruitmentDestinations() {
       if (!posting) { target.note += ' Live response has no verifiable JobPosting data.'; continue; }
       const expected = configured.evidence.pages.find(page => new URL(page.url).pathname === target.page);
       const actualSalary = posting.baseSalary?.value;
-      const identityOk = posting.hiringOrganization?.name?.replace(/\s/g, '') === '株式会社吏央'
+      const allowedEmployers = target.page === '/recruit/yokohama/'
+        ? ['株式会社吏央', '株式会社吏央横浜支店'] : ['株式会社吏央'];
+      const identityOk = allowedEmployers.includes(posting.hiringOrganization?.name?.replace(/\s/g, ''))
         && posting.jobLocation?.address?.addressRegion === (target.page.includes('sapporo') ? '北海道' : '神奈川県');
-      const salaryOk = expected.salary?.minValue === actualSalary?.minValue
+      const salaryOk = Number.isFinite(expected.salary?.minValue) && Number.isFinite(expected.salary?.maxValue)
+        && typeof expected.salary?.unitText === 'string'
+        && expected.salary.minValue === actualSalary?.minValue
         && expected.salary?.maxValue === actualSalary?.maxValue
         && expected.salary?.unitText === actualSalary?.unitText;
       target.status = identityOk && salaryOk ? 'PASS' : 'FAIL';
